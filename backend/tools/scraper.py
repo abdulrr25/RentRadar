@@ -3,8 +3,10 @@ Property listing fetcher — uses Anakin's /v1/search API to find real listings
 from NoBroker, OLX, and Housing.com.
 
 Direct scraping of these portals is blocked by bot detection, so we use web
-search which returns clean snippets WITH the real listing URL — letting the
-UI link straight through to the original ad page.
+search. Each portal returns several distinct result pages, each with its own
+URL + snippet (often containing real prices) — we return ALL of them so the
+agent can build a diverse, multi-platform listing set and link each listing to
+its specific page.
 """
 
 import httpx
@@ -22,10 +24,10 @@ def _headers() -> dict:
 
 async def _search(prompt: str, source_name: str, limit: int = 5) -> dict:
     """
-    Run an Anakin web search and return clean snippets plus the top result URL.
+    Run an Anakin web search and return a list of structured results.
 
-    The returned dict carries a top-level `url` so the agent can attach a
-    clickable link to each listing it surfaces from this source.
+    Returns {source, status, results:[{title, url, snippet}]}. Each result is a
+    distinct portal page — the agent picks listings from across all of them.
     """
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(20.0, connect=5.0)) as client:
@@ -36,23 +38,22 @@ async def _search(prompt: str, source_name: str, limit: int = 5) -> dict:
             )
             response.raise_for_status()
             data = response.json()
-            results = [r for r in data.get("results", []) if r.get("snippet")]
+            results = [
+                {
+                    "title": (r.get("title") or "").strip(),
+                    "url": r.get("url"),
+                    "snippet": (r.get("snippet") or "").strip(),
+                }
+                for r in data.get("results", [])
+                if r.get("snippet") and r.get("url")
+            ]
 
             if not results:
-                # Honest status — don't pretend a dead source returned data
-                return {"source": source_name, "status": "error",
-                        "data": "no results", "url": None}
+                return {"source": source_name, "status": "error", "results": []}
 
-            snippets = "\n\n".join(
-                f"[{r.get('date', '')}] {r.get('snippet', '')}"
-                for r in results
-            )
-            top_url = results[0].get("url")
-            return {"source": source_name, "status": "ok",
-                    "data": snippets, "url": top_url}
+            return {"source": source_name, "status": "ok", "results": results}
     except Exception as e:
-        return {"source": source_name, "status": "error",
-                "data": str(e), "url": None}
+        return {"source": source_name, "status": "error", "results": [], "error": str(e)}
 
 
 async def fetch_nobroker(locality: str, bhk: str, max_rent: int) -> dict:
@@ -66,11 +67,13 @@ async def fetch_nobroker(locality: str, bhk: str, max_rent: int) -> dict:
 
 async def fetch_olx(locality: str, bhk: str, max_rent: int) -> dict:
     """Search OLX listings via Anakin web search (replaces MagicBricks, which
-    Anakin's search index does not cover)."""
-    prompt = (
-        f"{bhk} for rent {locality} Bangalore under Rs {max_rent} "
-        f"site:olx.in rent price"
-    )
+    Anakin's search index does not cover).
+
+    Note: using `olx.in` as a keyword (not the `site:` operator) and omitting a
+    price filter steers results to OLX's per-ad results page, which carries real
+    inline prices — far richer than OLX's category landing pages.
+    """
+    prompt = f"{bhk} rent in {locality} Bangalore olx.in"
     return await _search(prompt, "OLX", limit=5)
 
 

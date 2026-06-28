@@ -86,7 +86,24 @@ async def synthesis_node(state: RentRadarState) -> RentRadarState:
     Sends all raw data to Groq (Llama 3.1 70B) for structured synthesis.
     Groq is free — no credits needed.
     """
-    context = build_context(state["raw_data"], state["query"])
+    # If every data source failed (e.g. Anakin quota exhausted / network down),
+    # don't waste an LLM call producing a misleading "no listings" brief — tell
+    # the user the sources are unavailable so the UI can show an honest message.
+    if state["raw_data"] and all(
+        item.get("status") != "ok" for item in state["raw_data"]
+    ):
+        return {
+            **state,
+            "brief": json.dumps({
+                "sources_unavailable": True,
+                "locality": state["query"].get("locality", "Bangalore"),
+                "message": "All live data sources are currently unavailable. "
+                           "This usually means the Anakin API credits are exhausted "
+                           "or the network is down. Please try again shortly.",
+            }),
+        }
+
+    context, ref_map = build_context(state["raw_data"], state["query"])
 
     client = _groq_client()
     response = client.chat.completions.create(
@@ -112,18 +129,39 @@ async def synthesis_node(state: RentRadarState) -> RentRadarState:
     # Validate JSON — wrap in safe error dict if malformed
     try:
         brief_obj = json.loads(cleaned)
-        # Attach the real source URL to each listing so the UI can link through
-        # to the original portal page. Mapped by source name to avoid the LLM
-        # hallucinating URLs.
-        url_map = {
-            item["source"]: item["url"]
-            for item in state["raw_data"]
-            if item.get("url")
-        }
         listings = brief_obj.get("top_listings", [])
         for listing in listings:
             if isinstance(listing, dict):
-                listing["url"] = url_map.get(listing.get("source"))
+                # Map the cited ref to its exact page URL AND authoritative source,
+                # so the displayed platform always matches the link it opens.
+                ref = listing.pop("ref", None)
+                mapped = ref_map.get(ref) if ref else None
+                if mapped:
+                    listing["url"] = mapped["url"]
+                    listing["source"] = mapped["source"]
+                else:
+                    listing["url"] = None
+
+        # Adaptive diversity guarantee: when more than one platform contributed,
+        # cap each platform at 2 so no single source can dominate the results.
+        # When only one platform has data, keep up to 4 from it.
+        listings = [l for l in listings if isinstance(l, dict)]
+        distinct_sources = {l.get("source") for l in listings}
+        if len(distinct_sources) > 1:
+            per_source_cap, seen = 2, {}
+            kept = []
+            for l in listings:
+                src = l.get("source")
+                if seen.get(src, 0) < per_source_cap:
+                    seen[src] = seen.get(src, 0) + 1
+                    kept.append(l)
+            listings = kept
+        else:
+            listings = listings[:4]
+        # Re-rank 1..N after filtering
+        for i, l in enumerate(listings, start=1):
+            l["rank"] = i
+        brief_obj["top_listings"] = listings
 
         # Deterministic budget_note: only keep it if NOTHING is at/under budget.
         # Stops the LLM contradicting itself (note vs. in-budget listings shown).

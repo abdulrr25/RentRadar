@@ -7,6 +7,8 @@ import LocalityScores from "./LocalityScores";
 interface RentBrief {
   locality?: string;
   search_summary?: string;
+  sources_unavailable?: boolean;
+  message?: string;
   budget_note?: string;
   top_listings?: any[];
   locality_scores?: Record<string, number>;
@@ -66,6 +68,21 @@ export default function RentRadarCard({ rawBrief }: Props) {
       return null;
     }
   }, [rawBrief]);
+
+  // Sources down (e.g. API quota exhausted) — show an honest message
+  if (brief?.sources_unavailable) {
+    return (
+      <div className="card-enter w-full max-w-2xl mx-auto mt-8 p-6 rounded-2xl bg-amber-950/30 border border-amber-700/40">
+        <p className="text-sm font-semibold text-amber-300 uppercase tracking-wider mb-2">
+          ⚠️ Data sources unavailable
+        </p>
+        <p className="text-sm text-amber-200/90 leading-relaxed">
+          {brief.message ??
+            "All live data sources are currently unavailable. Please try again shortly."}
+        </p>
+      </div>
+    );
+  }
 
   // Fallback: show raw text if JSON parse failed
   if (!brief) {
