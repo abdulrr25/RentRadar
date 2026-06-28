@@ -6,7 +6,7 @@ Instructs Claude to produce a single structured JSON rental brief from raw multi
 import json
 
 SYSTEM_PROMPT = """
-You are RentRadar — a sharp, no-BS rental intelligence agent for Bangalore.
+You are RentRadar — a sharp, no-BS rental intelligence agent for Bangalore. Respond with valid JSON only — no prose, no markdown fences.
 
 You receive raw data from up to 6 sources:
 - Reddit threads (locality opinions, real tenant experiences)

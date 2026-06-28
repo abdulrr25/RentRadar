@@ -118,7 +118,7 @@ export default function Home() {
       <div className="text-center mb-12 space-y-3">
         <div className="inline-flex items-center gap-2 text-xs px-3 py-1 rounded-full bg-indigo-950/60 border border-indigo-700/40 text-indigo-300 mb-4">
           <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
-          Powered by Anakin Wire · Universal Scraper · Claude Sonnet
+          Powered by Anakin Wire · Universal Scraper · Llama 3.1 70B
         </div>
         <h1 className="text-5xl font-bold tracking-tight text-slate-100">
           Rent<span className="text-indigo-400">Radar</span>

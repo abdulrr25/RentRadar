@@ -4,8 +4,9 @@ LangGraph agent for RentRadar.
 Graph:
   parallel_fetch_node  →  synthesis_node  →  END
 
-Node 1 fires 7 async fetches simultaneously (Wire + Universal Scraper).
-Node 2 sends all raw data to Claude Sonnet for structured synthesis.
+Node 1 fires 6 async fetches simultaneously (Wire + Universal Scraper).
+Node 2 sends all raw data to Groq (Llama 3.1 70B) for structured synthesis.
+Groq is free — sign up at console.groq.com.
 """
 
 import asyncio
@@ -14,18 +15,21 @@ import os
 from typing import TypedDict, List
 
 from langgraph.graph import StateGraph, END
-from anthropic import Anthropic
+from groq import Groq
 
 from tools.holocron import fetch_reddit, fetch_google_news, fetch_hackernews
 from tools.scraper import fetch_nobroker, fetch_magicbricks, fetch_housing
 from prompts import SYSTEM_PROMPT, build_context
 
-client = Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+
+def _groq_client() -> Groq:
+    """Create Groq client at call time so the key is always fresh from env."""
+    return Groq(api_key=os.getenv("GROQ_API_KEY", ""))
 
 
 class RentRadarState(TypedDict):
     query: dict           # parsed query params from parser.py
-    raw_data: List[dict]  # all fetched results (7 sources)
+    raw_data: List[dict]  # all fetched results (6 sources)
     brief: str            # final synthesized JSON brief
     error: str            # any critical pipeline error
 
@@ -79,24 +83,32 @@ async def parallel_fetch_node(state: RentRadarState) -> RentRadarState:
 
 async def synthesis_node(state: RentRadarState) -> RentRadarState:
     """
-    Sends all raw data to Claude Sonnet.
-    Returns a structured JSON rental brief.
+    Sends all raw data to Groq (Llama 3.1 70B) for structured synthesis.
+    Groq is free — no credits needed.
     """
     context = build_context(state["raw_data"], state["query"])
 
-    response = client.messages.create(
-        model="claude-sonnet-4-5",
+    client = _groq_client()
+    response = client.chat.completions.create(
+        model="llama-3.1-70b-versatile",
         max_tokens=2048,
-        system=SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": context}],
+        temperature=0.2,
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": context},
+        ],
     )
 
-    brief_text = response.content[0].text
+    brief_text = response.choices[0].message.content
 
-    # Validate Claude returned parseable JSON; if not, wrap it so the
-    # frontend fallback card handles it gracefully instead of crashing.
+    # Strip markdown fences if the model wraps its JSON output
+    cleaned = brief_text.strip()
+    if cleaned.startswith("```"):
+        cleaned = cleaned.split("```", 2)[-1] if cleaned.count("```") >= 2 else cleaned
+        cleaned = cleaned.lstrip("json").strip().rstrip("```").strip()
+
+    # Validate JSON — wrap in safe error dict if malformed
     try:
-        cleaned = brief_text.strip().lstrip("```json").lstrip("```").rstrip("```").strip()
         json.loads(cleaned)
         brief = cleaned
     except (json.JSONDecodeError, ValueError):
