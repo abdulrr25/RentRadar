@@ -57,30 +57,35 @@ async def _search(prompt: str, source_name: str, limit: int = 5) -> dict:
 
 
 async def fetch_nobroker(locality: str, bhk: str, max_rent: int) -> dict:
-    """Search NoBroker listings via Anakin web search."""
+    """Search NoBroker individual property pages via Anakin web search.
+    Targeting /property/ paths returns single-listing detail pages rather than
+    category/search pages, so each URL links to one specific ad.
+    """
     prompt = (
-        f"{bhk} flat for rent in {locality} Bangalore under Rs {max_rent} "
-        f"site:nobroker.in owner direct deposit price"
+        f'site:nobroker.in/property {bhk} rent {locality} Bangalore '
+        f'₹{max_rent} per month owner'
     )
-    return await _search(prompt, "NoBroker", limit=5)
+    return await _search(prompt, "NoBroker", limit=6)
 
 
 async def fetch_olx(locality: str, bhk: str, max_rent: int) -> dict:
-    """Search OLX listings via Anakin web search (replaces MagicBricks, which
-    Anakin's search index does not cover).
-
-    Note: using `olx.in` as a keyword (not the `site:` operator) and omitting a
-    price filter steers results to OLX's per-ad results page, which carries real
-    inline prices — far richer than OLX's category landing pages.
+    """Search OLX individual ad pages.
+    OLX ad URLs contain /item/ — including that in the query pushes the search
+    engine to return individual ads rather than category listing pages.
     """
-    prompt = f"{bhk} rent in {locality} Bangalore olx.in"
-    return await _search(prompt, "OLX", limit=5)
+    prompt = (
+        f'site:olx.in/item {bhk} for rent {locality} Bangalore '
+        f'₹{max_rent} month furnished'
+    )
+    return await _search(prompt, "OLX", limit=6)
 
 
 async def fetch_housing(locality: str, bhk: str) -> dict:
-    """Search Housing.com listings via Anakin web search."""
+    """Search Housing.com individual property detail pages.
+    /rent/property-detail paths are single-property pages with exact price shown.
+    """
     prompt = (
-        f"{bhk} rental flat {locality} Bangalore "
-        f"site:housing.com rent price deposit"
+        f'site:housing.com {bhk} for rent {locality} Bangalore '
+        f'rent deposit semifurnished'
     )
-    return await _search(prompt, "Housing.com", limit=5)
+    return await _search(prompt, "Housing.com", limit=6)

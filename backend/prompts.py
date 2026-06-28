@@ -44,7 +44,7 @@ DIVERSITY RULE (critical): Spread top_listings ACROSS the portals. If NoBroker, 
 
 REF RULE (critical): For every listing set "ref" to the exact [REF] tag shown next to the source page you took it from (e.g. "OLX2"). This is how the listing gets linked to the right page. Do not invent refs.
 
-BUDGET RULE: Only include listings with rent <= the user's max budget, sorted ascending by rent. If a portal only shows higher-priced options, return the cheapest you found and set "budget_note" explaining nothing was available at/under budget.
+BUDGET RULE (critical): NEVER include any listing with rent > user's max budget. Hard exclude them — do NOT show them even as alternatives. Sort remaining listings ascending by rent. If EVERY listing found is above budget, return an empty top_listings array and set "budget_note" explaining nothing was available at/under budget.
 
 Other rules: extract real prices only (never invent a number), ignore sale prices like ₹25,00,000 / "Crores" (those are not monthly rent), score locality 1-10 from sentiment, omit fields with no evidence, skip unavailable sources silently."""
 

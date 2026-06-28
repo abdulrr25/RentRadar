@@ -142,6 +142,13 @@ async def synthesis_node(state: RentRadarState) -> RentRadarState:
                 else:
                     listing["url"] = None
 
+        # Hard budget filter — always enforce regardless of LLM behaviour
+        if max_rent:
+            listings = [
+                l for l in listings
+                if isinstance(l.get("rent"), (int, float)) and l["rent"] <= max_rent
+            ]
+
         # Adaptive diversity guarantee: when more than one platform contributed,
         # cap each platform at 2 so no single source can dominate the results.
         # When only one platform has data, keep up to 4 from it.
@@ -163,17 +170,19 @@ async def synthesis_node(state: RentRadarState) -> RentRadarState:
             l["rank"] = i
         brief_obj["top_listings"] = listings
 
-        # Deterministic budget_note: only keep it if NOTHING is at/under budget.
-        # Stops the LLM contradicting itself (note vs. in-budget listings shown).
+        # Deterministic budget_note handling:
+        # - If we have in-budget listings, remove any LLM budget_note (not needed)
+        # - If hard filter removed ALL listings, set an honest budget_note
         max_rent = state["query"].get("max_rent")
-        if max_rent and listings:
-            within = [
-                l for l in listings
-                if isinstance(l, dict) and isinstance(l.get("rent"), (int, float))
-                and l["rent"] <= max_rent
-            ]
-            if within:
+        if max_rent:
+            if listings:
+                # All remaining listings are in-budget (hard filter ran above)
                 brief_obj.pop("budget_note", None)
+            else:
+                brief_obj["budget_note"] = (
+                    f"No listings found at or below ₹{max_rent:,}/mo in this area. "
+                    "The prices shown in search results were above your budget."
+                )
 
         brief = json.dumps(brief_obj)
     except (json.JSONDecodeError, ValueError):
