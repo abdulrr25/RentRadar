@@ -12,9 +12,9 @@ interface Listing {
 }
 
 const SOURCE_BADGE: Record<string, string> = {
-  NoBroker: "bg-green-900/60 text-green-400 border-green-700/40",
-  OLX: "bg-purple-900/60 text-purple-400 border-purple-700/40",
-  "Housing.com": "bg-blue-900/60 text-blue-400 border-blue-700/40",
+  NoBroker: "bg-green-500/15 text-green-300 border-green-600/30",
+  OLX: "bg-purple-500/15 text-purple-300 border-purple-600/30",
+  "Housing.com": "bg-blue-500/15 text-blue-300 border-blue-600/30",
 };
 
 function ListingBody({ l }: { l: Listing }) {
@@ -22,26 +22,26 @@ function ListingBody({ l }: { l: Listing }) {
   return (
     <>
       {/* Rank badge */}
-      <div className="flex-shrink-0 w-8 h-8 rounded-full bg-indigo-900/50 border border-indigo-700/40 flex items-center justify-center text-indigo-300 font-bold text-sm">
+      <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500/20 to-violet-500/10 text-sm font-bold text-indigo-300 ring-1 ring-white/10">
         {l.rank}
       </div>
 
-      <div className="flex-1 min-w-0">
-        <div className="flex items-start justify-between gap-2 flex-wrap">
-          <div>
-            <p className="font-semibold text-slate-100">{l.locality_detail}</p>
+      <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-start justify-between gap-2">
+          <div className="min-w-0">
+            <p className="truncate font-semibold text-slate-100">{l.locality_detail}</p>
             {l.commute_note && (
-              <p className="text-xs text-slate-500 mt-0.5">{l.commute_note}</p>
+              <p className="mt-0.5 text-xs text-slate-500">{l.commute_note}</p>
             )}
           </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <span className="text-lg font-bold text-emerald-400">
+          <div className="flex flex-shrink-0 items-center gap-2">
+            <span className="font-display text-lg font-bold text-emerald-400">
               ₹{l.rent.toLocaleString("en-IN")}
               <span className="text-sm font-normal text-slate-500">/mo</span>
             </span>
             <span
-              className={`text-xs px-2 py-0.5 rounded-full border font-medium inline-flex items-center gap-1 ${
-                SOURCE_BADGE[l.source] ?? "bg-slate-800 text-slate-400 border-slate-700"
+              className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium ${
+                SOURCE_BADGE[l.source] ?? "border-slate-700 bg-slate-800 text-slate-400"
               }`}
             >
               {l.source}
@@ -50,13 +50,12 @@ function ListingBody({ l }: { l: Listing }) {
           </div>
         </div>
 
-        {/* Highlights */}
         {l.highlights && l.highlights.length > 0 && (
-          <div className="flex flex-wrap gap-1.5 mt-2">
+          <div className="mt-2.5 flex flex-wrap gap-1.5">
             {l.highlights.map((h) => (
               <span
                 key={h}
-                className="text-xs px-2 py-0.5 rounded bg-[#1e1e2e] text-slate-400"
+                className="rounded-md bg-white/[0.04] px-2 py-0.5 text-xs text-slate-400"
               >
                 {h}
               </span>
@@ -65,8 +64,9 @@ function ListingBody({ l }: { l: Listing }) {
         )}
 
         {clickable && (
-          <p className="text-xs text-indigo-400/80 mt-2">
-            View original listing on {l.source} →
+          <p className="mt-2.5 inline-flex items-center gap-1 text-xs font-medium text-indigo-400 transition group-hover:gap-1.5 group-hover:text-indigo-300">
+            View original listing on {l.source}
+            <span aria-hidden="true">→</span>
           </p>
         )}
       </div>
@@ -87,14 +87,14 @@ export default function ListingCards({ listings }: { listings: Listing[] }) {
             target="_blank"
             rel="noopener noreferrer"
             title={`View on ${l.source}`}
-            className="flex items-start gap-4 p-4 rounded-xl bg-[#0d0d15] border border-[#1e1e2e] transition-colors duration-200 hover:border-indigo-500/50 hover:bg-[#11111c] cursor-pointer"
+            className="group flex items-start gap-4 rounded-2xl border border-white/[0.07] bg-white/[0.02] p-4 transition duration-200 hover:-translate-y-0.5 hover:border-indigo-500/40 hover:bg-white/[0.045] hover:shadow-glow-sm"
           >
             <ListingBody l={l} />
           </a>
         ) : (
           <div
             key={l.rank}
-            className="flex items-start gap-4 p-4 rounded-xl bg-[#0d0d15] border border-[#1e1e2e] transition-colors duration-200 hover:border-indigo-500/30"
+            className="group flex items-start gap-4 rounded-2xl border border-white/[0.07] bg-white/[0.02] p-4 transition duration-200 hover:border-white/15"
           >
             <ListingBody l={l} />
           </div>
