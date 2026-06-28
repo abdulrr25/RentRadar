@@ -69,8 +69,8 @@ async def wire_action(action_id: str, params: dict, source_name: str) -> dict:
 
 
 async def fetch_reddit(locality: str, bhk: str) -> dict:
-    """Wire → rt_search — Reddit posts about this locality."""
-    query = f"{locality} Bangalore rent {bhk} review"
+    """Wire → rt_search — Reddit posts from r/bangalore about this locality."""
+    query = f"subreddit:bangalore {locality} rent {bhk}"
     return await wire_action(
         action_id="rt_search",
         params={"query": query, "limit": 15, "sort": "relevance", "time": "year"},
