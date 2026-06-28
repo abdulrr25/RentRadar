@@ -90,7 +90,7 @@ async def synthesis_node(state: RentRadarState) -> RentRadarState:
 
     client = _groq_client()
     response = client.chat.completions.create(
-        model="llama-3.1-70b-versatile",
+        model="llama-3.3-70b-versatile",
         max_tokens=2048,
         temperature=0.2,
         messages=[

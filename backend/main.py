@@ -102,7 +102,7 @@ async def search(request: SearchRequest):
 
 @app.get("/health")
 async def health():
-    missing = [k for k in ("ANAKIN_API_KEY", "ANTHROPIC_API_KEY") if not os.getenv(k)]
+    missing = [k for k in ("ANAKIN_API_KEY", "GROQ_API_KEY") if not os.getenv(k)]
     if missing:
         return {"status": "degraded", "missing_env": missing}
     return {"status": "ok", "service": "RentRadar"}
