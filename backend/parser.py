@@ -50,15 +50,18 @@ def parse_query(query: str) -> dict:
 
     # Extract max rent — handles ₹25000, Rs 25,000, under 25k, below 25000
     rent_match = re.search(
-        r"(?:under|below|max|upto|up to|₹|rs\.?)\s*(\d+(?:[,\d]*)(?:k)?)",
+        r"(?:under|below|max|upto|up\s+to|₹|rs\.?)\s*(\d[\d,]*[kK]?)",
         query,
         re.IGNORECASE,
     )
     if rent_match:
         raw = rent_match.group(1).replace(",", "").strip()
-        if raw.lower().endswith("k"):
-            result["max_rent"] = int(raw[:-1]) * 1000
-        else:
-            result["max_rent"] = int(raw)
+        try:
+            if raw.lower().endswith("k"):
+                result["max_rent"] = int(raw[:-1]) * 1000
+            else:
+                result["max_rent"] = int(raw)
+        except ValueError:
+            pass  # keep default 30000
 
     return result
