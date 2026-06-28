@@ -52,9 +52,15 @@ function Section({
 export default function RentRadarCard({ rawBrief }: Props) {
   const brief: RentBrief | null = useMemo(() => {
     try {
-      // Strip markdown code fences if Claude wraps it
-      const cleaned = rawBrief.replace(/^```json\s*/i, "").replace(/```\s*$/, "").trim();
-      return JSON.parse(cleaned);
+      // Strip markdown fences then extract outermost JSON object
+      const stripped = rawBrief.replace(/^```json\s*/i, "").replace(/```\s*$/m, "").trim();
+      const parsed = JSON.parse(stripped);
+      // If backend returned a synthesis_failed wrapper, dig into the raw field
+      if (parsed?.error === "synthesis_failed" && parsed?.raw) {
+        const inner = parsed.raw.replace(/^```json\s*/i, "").replace(/```\s*$/m, "").trim();
+        return JSON.parse(inner);
+      }
+      return parsed;
     } catch {
       return null;
     }

@@ -101,11 +101,13 @@ async def synthesis_node(state: RentRadarState) -> RentRadarState:
 
     brief_text = response.choices[0].message.content
 
-    # Strip markdown fences if the model wraps its JSON output
+    # Extract JSON even when the model wraps it in markdown fences
+    import re
     cleaned = brief_text.strip()
-    if cleaned.startswith("```"):
-        cleaned = cleaned.split("```", 2)[-1] if cleaned.count("```") >= 2 else cleaned
-        cleaned = cleaned.lstrip("json").strip().rstrip("```").strip()
+    # Try regex first: grab content between first { and last }
+    json_match = re.search(r'\{.*\}', cleaned, re.DOTALL)
+    if json_match:
+        cleaned = json_match.group(0)
 
     # Validate JSON — wrap in safe error dict if malformed
     try:
