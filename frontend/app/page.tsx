@@ -9,7 +9,7 @@ type SourceStatus = "idle" | "fetching" | "ok" | "error";
 
 const ALL_SOURCES = [
   "Reddit", "Google News", "Hacker News",
-  "NoBroker", "MagicBricks", "Housing.com",
+  "NoBroker", "OLX", "Housing.com",
 ];
 
 export default function Home() {
@@ -118,7 +118,7 @@ export default function Home() {
       <div className="text-center mb-12 space-y-3">
         <div className="inline-flex items-center gap-2 text-xs px-3 py-1 rounded-full bg-indigo-950/60 border border-indigo-700/40 text-indigo-300 mb-4">
           <span className="w-1.5 h-1.5 rounded-full bg-indigo-400 animate-pulse" />
-          Powered by Anakin Wire · Universal Scraper · Llama 3.1 70B
+          Powered by Anakin Wire · Universal Scraper · Llama 3.3 70B
         </div>
         <h1 className="text-5xl font-bold tracking-tight text-slate-100">
           Rent<span className="text-indigo-400">Radar</span>
@@ -127,7 +127,7 @@ export default function Home() {
           Find your Bangalore flat. Instantly.
           <br />
           <span className="text-slate-500 text-base">
-            AI-powered intelligence from 7 live sources — listings, Reddit, trends & scam alerts.
+            AI-powered intelligence from 6 live sources — listings, Reddit, trends & scam alerts.
           </span>
         </p>
       </div>

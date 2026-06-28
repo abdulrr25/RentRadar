@@ -18,7 +18,7 @@ from langgraph.graph import StateGraph, END
 from groq import Groq
 
 from tools.holocron import fetch_reddit, fetch_google_news, fetch_hackernews
-from tools.scraper import fetch_nobroker, fetch_magicbricks, fetch_housing
+from tools.scraper import fetch_nobroker, fetch_olx, fetch_housing
 from prompts import SYSTEM_PROMPT, build_context
 
 
@@ -54,7 +54,7 @@ async def parallel_fetch_node(state: RentRadarState) -> RentRadarState:
         fetch_google_news(locality),
         fetch_hackernews(locality),
         fetch_nobroker(locality, bhk, max_rent),
-        fetch_magicbricks(locality, bhk, max_rent),
+        fetch_olx(locality, bhk, max_rent),
         fetch_housing(locality, bhk),
         return_exceptions=True,
     )
@@ -111,8 +111,33 @@ async def synthesis_node(state: RentRadarState) -> RentRadarState:
 
     # Validate JSON — wrap in safe error dict if malformed
     try:
-        json.loads(cleaned)
-        brief = cleaned
+        brief_obj = json.loads(cleaned)
+        # Attach the real source URL to each listing so the UI can link through
+        # to the original portal page. Mapped by source name to avoid the LLM
+        # hallucinating URLs.
+        url_map = {
+            item["source"]: item["url"]
+            for item in state["raw_data"]
+            if item.get("url")
+        }
+        listings = brief_obj.get("top_listings", [])
+        for listing in listings:
+            if isinstance(listing, dict):
+                listing["url"] = url_map.get(listing.get("source"))
+
+        # Deterministic budget_note: only keep it if NOTHING is at/under budget.
+        # Stops the LLM contradicting itself (note vs. in-budget listings shown).
+        max_rent = state["query"].get("max_rent")
+        if max_rent and listings:
+            within = [
+                l for l in listings
+                if isinstance(l, dict) and isinstance(l.get("rent"), (int, float))
+                and l["rent"] <= max_rent
+            ]
+            if within:
+                brief_obj.pop("budget_note", None)
+
+        brief = json.dumps(brief_obj)
     except (json.JSONDecodeError, ValueError):
         brief = json.dumps({"error": "synthesis_failed", "raw": brief_text})
 

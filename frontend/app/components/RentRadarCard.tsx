@@ -7,6 +7,7 @@ import LocalityScores from "./LocalityScores";
 interface RentBrief {
   locality?: string;
   search_summary?: string;
+  budget_note?: string;
   top_listings?: any[];
   locality_scores?: Record<string, number>;
   price_trend?: string;
@@ -110,8 +111,16 @@ export default function RentRadarCard({ rawBrief }: Props) {
       </div>
 
       <div className="px-6 py-5 space-y-7 divide-y divide-[#1e1e2e]">
+        {/* Budget note — shown when nothing was found at/under budget */}
+        {brief.budget_note && (
+          <div className="rounded-xl bg-amber-950/40 border border-amber-700/40 p-3 text-sm text-amber-300 flex items-start gap-2">
+            <span className="flex-shrink-0">💸</span>
+            {brief.budget_note}
+          </div>
+        )}
+
         {/* Top Listings */}
-        {brief.top_listings?.length > 0 && (
+        {brief.top_listings && brief.top_listings.length > 0 && (
           <Section title="Top Listings" icon="🏠">
             <ListingCards listings={brief.top_listings} />
           </Section>
@@ -150,7 +159,7 @@ export default function RentRadarCard({ rawBrief }: Props) {
         {((brief.green_flags?.length ?? 0) > 0 || (brief.red_flags?.length ?? 0) > 0) && (
           <div className="pt-6">
             <div className="grid grid-cols-2 gap-6">
-              {brief.green_flags?.length > 0 && (
+              {brief.green_flags && brief.green_flags.length > 0 && (
                 <div>
                   <p className="text-xs font-semibold text-emerald-500 uppercase tracking-widest mb-2">
                     ✅ Green Flags
@@ -165,7 +174,7 @@ export default function RentRadarCard({ rawBrief }: Props) {
                   </ul>
                 </div>
               )}
-              {brief.red_flags?.length > 0 && (
+              {brief.red_flags && brief.red_flags.length > 0 && (
                 <div>
                   <p className="text-xs font-semibold text-red-500 uppercase tracking-widest mb-2">
                     🔴 Red Flags
@@ -185,7 +194,7 @@ export default function RentRadarCard({ rawBrief }: Props) {
         )}
 
         {/* Scam Alerts */}
-        {brief.scam_alerts?.length > 0 && (
+        {brief.scam_alerts && brief.scam_alerts.length > 0 && (
           <div className="pt-6">
             <Section title="Scam Alerts" icon="⚠️">
               <div className="bg-amber-950/40 border border-amber-700/40 rounded-xl p-4 space-y-1.5">

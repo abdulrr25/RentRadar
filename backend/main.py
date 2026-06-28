@@ -63,7 +63,7 @@ async def search(request: SearchRequest):
             # Phase 2: signal fetch start
             sources = [
                 "Reddit", "Google News", "Hacker News",
-                "NoBroker", "MagicBricks", "Housing.com",
+                "NoBroker", "OLX", "Housing.com",
             ]
             yield f"data: {json.dumps({'type': 'fetching', 'sources': sources})}\n\n"
             await asyncio.sleep(0)
