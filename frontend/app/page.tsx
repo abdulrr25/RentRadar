@@ -8,7 +8,7 @@ import RentRadarCard from "./components/RentRadarCard";
 type SourceStatus = "idle" | "fetching" | "ok" | "error";
 
 const ALL_SOURCES = [
-  "Reddit", "Google Trends", "Hacker News", "Twitter/X",
+  "Reddit", "Google News", "Hacker News",
   "NoBroker", "MagicBricks", "Housing.com",
 ];
 

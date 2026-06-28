@@ -16,7 +16,7 @@ from typing import TypedDict, List
 from langgraph.graph import StateGraph, END
 from anthropic import Anthropic
 
-from tools.holocron import fetch_reddit, fetch_google_trends, fetch_hackernews, fetch_twitter
+from tools.holocron import fetch_reddit, fetch_google_news, fetch_hackernews
 from tools.scraper import fetch_nobroker, fetch_magicbricks, fetch_housing
 from prompts import SYSTEM_PROMPT, build_context
 
@@ -34,8 +34,8 @@ class RentRadarState(TypedDict):
 
 async def parallel_fetch_node(state: RentRadarState) -> RentRadarState:
     """
-    Fires all 7 data fetches simultaneously.
-    - Wire (Holocron): Reddit, Google Trends, Hacker News, Twitter/X
+    Fires all 6 data fetches simultaneously.
+    - Wire: Reddit, Google News, Hacker News
     - Universal Scraper: NoBroker, MagicBricks, Housing.com
 
     Uses return_exceptions=True so a single timeout never kills the pipeline.
@@ -47,9 +47,8 @@ async def parallel_fetch_node(state: RentRadarState) -> RentRadarState:
 
     results = await asyncio.gather(
         fetch_reddit(locality, bhk),
-        fetch_google_trends(locality),
+        fetch_google_news(locality),
         fetch_hackernews(locality),
-        fetch_twitter(locality),
         fetch_nobroker(locality, bhk, max_rent),
         fetch_magicbricks(locality, bhk, max_rent),
         fetch_housing(locality, bhk),

@@ -8,11 +8,10 @@ import json
 SYSTEM_PROMPT = """
 You are RentRadar — a sharp, no-BS rental intelligence agent for Bangalore.
 
-You receive raw data from up to 7 sources:
+You receive raw data from up to 6 sources:
 - Reddit threads (locality opinions, real tenant experiences)
-- Google Trends (demand signals, search momentum)
+- Google News (recent news about the area, rental market signals)
 - Hacker News (tech-worker perspectives on the area)
-- Twitter/X (recent real-time chatter)
 - NoBroker listings (actual flats available with prices)
 - MagicBricks listings (additional inventory)
 - Housing.com (locality price trend data)
