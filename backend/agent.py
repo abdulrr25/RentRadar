@@ -9,6 +9,7 @@ Node 2 sends all raw data to Claude Sonnet for structured synthesis.
 """
 
 import asyncio
+import json
 import os
 from typing import TypedDict, List
 
@@ -58,9 +59,19 @@ async def parallel_fetch_node(state: RentRadarState) -> RentRadarState:
     clean_results = []
     for r in results:
         if isinstance(r, Exception):
-            clean_results.append({"source": "unknown", "status": "error", "data": str(r)})
-        else:
+            clean_results.append({
+                "source": "unknown",
+                "status": "error",
+                "data": f"{type(r).__name__}: {r}",
+            })
+        elif isinstance(r, dict):
             clean_results.append(r)
+        else:
+            clean_results.append({
+                "source": "unknown",
+                "status": "error",
+                "data": f"Unexpected type: {type(r).__name__}",
+            })
 
     return {**state, "raw_data": clean_results}
 
@@ -75,13 +86,23 @@ async def synthesis_node(state: RentRadarState) -> RentRadarState:
     context = build_context(state["raw_data"], state["query"])
 
     response = client.messages.create(
-        model="claude-sonnet-4-6",
+        model="claude-sonnet-4-5",
         max_tokens=2048,
         system=SYSTEM_PROMPT,
         messages=[{"role": "user", "content": context}],
     )
 
-    brief = response.content[0].text
+    brief_text = response.content[0].text
+
+    # Validate Claude returned parseable JSON; if not, wrap it so the
+    # frontend fallback card handles it gracefully instead of crashing.
+    try:
+        cleaned = brief_text.strip().lstrip("```json").lstrip("```").rstrip("```").strip()
+        json.loads(cleaned)
+        brief = cleaned
+    except (json.JSONDecodeError, ValueError):
+        brief = json.dumps({"error": "synthesis_failed", "raw": brief_text})
+
     return {**state, "brief": brief}
 
 
