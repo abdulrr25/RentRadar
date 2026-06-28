@@ -12,10 +12,11 @@ dist/
 build/
 .pytest_cache/
 
-# Environment
+# Environment — never commit real keys
 .env
 .env.local
 .env.production
+.env.example
 
 # Node
 node_modules/
