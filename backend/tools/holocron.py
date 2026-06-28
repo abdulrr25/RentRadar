@@ -18,7 +18,7 @@ HEADERS = {
 async def holocron_action(action_id: str, params: dict, source_name: str) -> dict:
     """Generic Wire (Holocron) action caller — always returns a safe dict."""
     try:
-        async with httpx.AsyncClient(timeout=15.0) as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(12.0, connect=5.0)) as client:
             response = await client.post(
                 f"{HOLOCRON_BASE}/task",
                 headers=HEADERS,

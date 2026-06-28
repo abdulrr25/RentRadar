@@ -18,7 +18,7 @@ HEADERS = {
 async def scrape_url(url: str, source_name: str, render_js: bool = True) -> dict:
     """Universal Scraper — any URL → Markdown content, always returns a safe dict."""
     try:
-        async with httpx.AsyncClient(timeout=25.0) as client:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(20.0, connect=5.0)) as client:
             response = await client.post(
                 SCRAPER_URL,
                 headers=HEADERS,
@@ -48,10 +48,11 @@ async def fetch_nobroker(locality: str, bhk: str, max_rent: int) -> dict:
 
 async def fetch_magicbricks(locality: str, bhk: str, max_rent: int) -> dict:
     """Scrape MagicBricks listings (JS-rendered — not in Wire catalog)."""
+    bhk_num = bhk.replace("BHK", "").strip()
     url = (
         f"https://www.magicbricks.com/property-for-rent/residential-real-estate"
         f"?proptype=Multistorey-Apartment,Builder-Floor-Apartment"
-        f"&city=Bangalore&area={locality}&maxPrice={max_rent}&bhk={bhk}"
+        f"&city=Bangalore&area={locality}&maxPrice={max_rent}&bhk={bhk_num}"
     )
     return await scrape_url(url, "MagicBricks", render_js=True)
 
