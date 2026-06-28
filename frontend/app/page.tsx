@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import SearchBar from "./components/SearchBar";
 import SourceIndicators from "./components/SourceIndicators";
 import RentRadarCard from "./components/RentRadarCard";
@@ -20,6 +20,11 @@ export default function Home() {
   const [error, setError]               = useState<string | null>(null);
   const [parsedQuery, setParsedQuery]   = useState<Record<string, any> | null>(null);
   const abortRef                        = useRef<AbortController | null>(null);
+
+  // Abort any in-flight request on unmount
+  useEffect(() => {
+    return () => { abortRef.current?.abort(); };
+  }, []);
 
   const handleSearch = useCallback(async (query: string) => {
     // Cancel any in-flight search
@@ -41,7 +46,10 @@ export default function Home() {
         signal: abortRef.current.signal,
       });
 
-      const reader = res.body!.getReader();
+      if (!res.body) {
+        throw new Error("Response body is empty — backend may be down.");
+      }
+      const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
 
