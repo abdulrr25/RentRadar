@@ -8,14 +8,18 @@ GET  /health  — liveness check; validates required env vars are present.
 import json
 import asyncio
 import os
+import traceback
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
+from pathlib import Path
 from dotenv import load_dotenv
 
-load_dotenv()
+# Load .env from backend dir first, then fall back to project root
+load_dotenv(Path(__file__).parent / ".env")
+load_dotenv(Path(__file__).parent.parent / ".env")
 
 from parser import parse_query
 from agent import agent
@@ -24,7 +28,8 @@ app = FastAPI(title="RentRadar API", version="1.0.0")
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "https://*.vercel.app"],
+    allow_origins=["http://localhost:3000"],
+    allow_origin_regex=r"https://.*\.vercel\.app",
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -53,6 +58,7 @@ async def search(request: SearchRequest):
             # Phase 1: parse
             parsed = parse_query(request.query)
             yield f"data: {json.dumps({'type': 'parsed', 'data': parsed})}\n\n"
+            await asyncio.sleep(0)  # flush to client immediately
 
             # Phase 2: signal fetch start
             sources = [
@@ -60,6 +66,7 @@ async def search(request: SearchRequest):
                 "NoBroker", "MagicBricks", "Housing.com",
             ]
             yield f"data: {json.dumps({'type': 'fetching', 'sources': sources})}\n\n"
+            await asyncio.sleep(0)
 
             # Phase 3: run agent (parallel fetch + LLM synthesis)
             result = await agent.ainvoke({
@@ -76,10 +83,12 @@ async def search(request: SearchRequest):
 
             # Phase 5: final brief
             yield f"data: {json.dumps({'type': 'brief', 'data': result['brief']})}\n\n"
+            await asyncio.sleep(0)
             yield f"data: {json.dumps({'type': 'done'})}\n\n"
 
         except Exception as e:
-            yield f"data: {json.dumps({'type': 'error', 'message': str(e)})}\n\n"
+            tb = traceback.format_exc()
+            yield f"data: {json.dumps({'type': 'error', 'message': str(e), 'detail': tb})}\n\n"
 
     return StreamingResponse(
         stream(),
