@@ -1,6 +1,8 @@
 /**
  * Next.js route handler — proxies SSE stream from FastAPI backend.
- * Uses BACKEND_API_URL (server-only) or falls back to NEXT_PUBLIC_API_URL.
+ *
+ * The browser calls /api/search (Next.js) which proxies to BACKEND_API_URL (FastAPI).
+ * The backend URL never reaches the browser — it stays server-side only.
  */
 
 import { NextRequest } from "next/server";
@@ -11,11 +13,8 @@ export const dynamic = "force-dynamic";
 export async function POST(req: NextRequest) {
   const body = await req.json();
 
-  // Prefer a server-only env var so the backend URL never hits the client bundle
-  const apiUrl =
-    process.env.BACKEND_API_URL ??
-    process.env.NEXT_PUBLIC_API_URL ??
-    "http://localhost:8000";
+  // Server-only env var — never exposed to the browser bundle
+  const apiUrl = process.env.BACKEND_API_URL ?? "http://localhost:8000";
 
   try {
     const upstream = await fetch(`${apiUrl}/search`, {
