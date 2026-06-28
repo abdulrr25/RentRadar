@@ -29,10 +29,15 @@ app = FastAPI(title="RentRadar API", version="1.0.0")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:3000"],
-    allow_origin_regex=r"https://.*\.vercel\.app",
+    allow_origin_regex=r"https://.*\.(vercel\.app|onrender\.com)",
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.get("/")
+async def root():
+    return {"service": "RentRadar API", "status": "ok", "docs": "/docs"}
 
 
 class SearchRequest(BaseModel):
