@@ -32,8 +32,8 @@ const TREND: Record<string, { color: string; bg: string; border: string; arrow: 
 
 function SectionHeading({ icon, title }: { icon: React.ReactNode; title: string }) {
   return (
-    <h3 className="flex items-center gap-2 text-[10.5px] font-bold uppercase tracking-[0.18em] text-slate-400 mb-4">
-      <span className="text-slate-400">{icon}</span>
+    <h3 className="flex items-center gap-2 text-[10.5px] font-bold uppercase tracking-[0.18em] text-slate-600 mb-4">
+      <span className="text-slate-500">{icon}</span>
       {title}
     </h3>
   );
@@ -83,28 +83,28 @@ export default function RentRadarCard({ rawBrief }: Props) {
     <div className="card-enter card mt-8 w-full overflow-hidden rounded-3xl">
 
       {/* Header */}
-      <div className="px-5 sm:px-7 py-6 bg-gradient-to-br from-brand-50 to-white border-b border-slate-100">
+      <div className="px-5 sm:px-7 py-7" style={{ background: "linear-gradient(135deg, #312e81 0%, #4338ca 60%, #4f46e5 100%)" }}>
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
-            <p className="mb-1.5 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-brand-600">
-              <span className="h-1.5 w-1.5 rounded-full bg-brand-500 animate-pulse" />
+            <p className="mb-1.5 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-indigo-200">
+              <span className="h-1.5 w-1.5 rounded-full bg-indigo-300 animate-pulse" />
               Live Brief · RentRadar
             </p>
-            <h2 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">
+            <h2 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-white">
               {brief.locality ?? "Bangalore"}
             </h2>
             {brief.search_summary && (
-              <p className="mt-1.5 text-sm text-slate-500 leading-relaxed">{brief.search_summary}</p>
+              <p className="mt-1.5 text-sm text-indigo-100 leading-relaxed">{brief.search_summary}</p>
             )}
           </div>
           {brief.price_trend && (
-            <div className={`flex-shrink-0 rounded-xl border px-3.5 py-2.5 text-right ${trend.bg} ${trend.border}`}>
-              <p className="text-[9px] font-semibold uppercase tracking-widest text-slate-400 mb-0.5">Trend</p>
-              <p className={`font-display text-lg font-bold ${trend.color}`}>{trend.arrow} {brief.price_trend}</p>
+            <div className="flex-shrink-0 rounded-xl border border-white/20 bg-white/10 px-3.5 py-2.5 text-right backdrop-blur-sm">
+              <p className="text-[9px] font-semibold uppercase tracking-widest text-indigo-200 mb-0.5">Trend</p>
+              <p className={`font-display text-lg font-bold text-white`}>{trend.arrow} {brief.price_trend}</p>
             </div>
           )}
         </div>
-        {brief.trend_note && <p className="mt-3 text-xs text-slate-400 leading-relaxed">{brief.trend_note}</p>}
+        {brief.trend_note && <p className="mt-3 text-xs text-indigo-200 leading-relaxed">{brief.trend_note}</p>}
       </div>
 
       {/* Budget note */}
@@ -164,7 +164,7 @@ export default function RentRadarCard({ rawBrief }: Props) {
                 <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
               </svg>
             } />
-            <blockquote className="rounded-xl border-l-2 border-brand-300 bg-brand-50 pl-4 pr-4 py-3 text-sm italic leading-relaxed text-slate-700">
+            <blockquote className="rounded-xl border-l-4 border-brand-500 bg-slate-50 border border-slate-200 pl-4 pr-4 py-3 text-sm italic leading-relaxed text-slate-700">
               {brief.reddit_pulse}
             </blockquote>
           </div>
@@ -181,7 +181,7 @@ export default function RentRadarCard({ rawBrief }: Props) {
                 <polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/>
               </svg>
             } />
-            <p className="text-sm leading-relaxed text-slate-600">{brief.hn_signal}</p>
+            <p className="text-sm leading-relaxed text-slate-700">{brief.hn_signal}</p>
           </div>
           <Divider />
         </>
@@ -193,8 +193,8 @@ export default function RentRadarCard({ rawBrief }: Props) {
           <div className="px-5 sm:px-7 py-6">
             <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
               {brief.green_flags && brief.green_flags.length > 0 && (
-                <div className="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-                  <p className="mb-3 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-700">
+                <div className="rounded-xl border border-emerald-300 bg-emerald-100 p-4">
+                  <p className="mb-3 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-emerald-800">
                     <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                       <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
                     </svg>
@@ -202,16 +202,16 @@ export default function RentRadarCard({ rawBrief }: Props) {
                   </p>
                   <ul className="space-y-2">
                     {brief.green_flags.map((f, i) => (
-                      <li key={i} className="flex items-start gap-2 text-sm text-emerald-800">
-                        <span className="mt-1 h-1 w-1 flex-shrink-0 rounded-full bg-emerald-500" />{f}
+                      <li key={i} className="flex items-start gap-2 text-sm text-emerald-900">
+                        <span className="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-emerald-600" />{f}
                       </li>
                     ))}
                   </ul>
                 </div>
               )}
               {brief.red_flags && brief.red_flags.length > 0 && (
-                <div className="rounded-xl border border-red-200 bg-red-50 p-4">
-                  <p className="mb-3 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-red-700">
+                <div className="rounded-xl border border-red-300 bg-red-100 p-4">
+                  <p className="mb-3 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.18em] text-red-800">
                     <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                       <circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/>
                     </svg>
@@ -219,8 +219,8 @@ export default function RentRadarCard({ rawBrief }: Props) {
                   </p>
                   <ul className="space-y-2">
                     {brief.red_flags.map((f, i) => (
-                      <li key={i} className="flex items-start gap-2 text-sm text-red-800">
-                        <span className="mt-1 h-1 w-1 flex-shrink-0 rounded-full bg-red-500" />{f}
+                      <li key={i} className="flex items-start gap-2 text-sm text-red-900">
+                        <span className="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-red-600" />{f}
                       </li>
                     ))}
                   </ul>
@@ -261,8 +261,8 @@ export default function RentRadarCard({ rawBrief }: Props) {
               <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>
             </svg>
           } />
-          <div className="rounded-xl border border-brand-200 bg-gradient-to-br from-brand-50 to-white p-5">
-            <p className="text-sm leading-[1.75] text-slate-700">{brief.verdict}</p>
+          <div className="rounded-xl border-l-4 border-brand-500 border border-slate-200 bg-slate-50 p-5">
+            <p className="text-sm leading-[1.75] text-slate-800">{brief.verdict}</p>
           </div>
         </div>
       )}

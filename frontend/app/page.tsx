@@ -148,7 +148,7 @@ export default function Home() {
             </div>
 
             {/* Stats */}
-            <div className="rise delay-4 mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-slate-400">
+            <div className="rise delay-4 mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-slate-500">
               {[
                 { val: "6",       label: "live data sources" },
                 { val: "Llama 3.3", label: "70B AI synthesis" },
@@ -222,7 +222,7 @@ export default function Home() {
 
       {/* ── Footer ────────────────────────────────────────────────────────── */}
       <footer className="border-t border-slate-200 bg-white">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6 py-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-400">
+        <div className="mx-auto max-w-6xl px-4 sm:px-6 py-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
           <div className="flex items-center gap-2.5">
             <span className="font-display text-sm font-bold text-slate-700">
               Rent<span className="gradient-text">Radar</span>

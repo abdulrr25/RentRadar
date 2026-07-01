@@ -46,12 +46,12 @@ export default function HowItWorks() {
 
         {/* Source trust strip */}
         <div className="mb-16 flex flex-col items-center gap-5">
-          <p className="text-[10.5px] font-semibold uppercase tracking-[0.22em] text-slate-400">
+          <p className="text-[10.5px] font-semibold uppercase tracking-[0.22em] text-slate-500">
             Aggregating real-time data from
           </p>
           <div className="flex flex-wrap items-center justify-center gap-2">
             {SOURCES.map((s) => (
-              <span key={s.name} className="flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-4 py-1.5 text-sm font-medium text-slate-600">
+              <span key={s.name} className="flex items-center gap-2 rounded-full border border-slate-300 bg-slate-100 px-4 py-1.5 text-sm font-medium text-slate-700">
                 <span className="h-1.5 w-1.5 rounded-full" style={{ background: s.dot }} />
                 {s.name}
               </span>
@@ -62,7 +62,7 @@ export default function HowItWorks() {
         {/* Heading */}
         <div className="text-center mb-10">
           <h2 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">How RentRadar works</h2>
-          <p className="mt-2 text-sm text-slate-400">From question to decision in three steps.</p>
+          <p className="mt-2 text-sm text-slate-500">From question to decision in three steps.</p>
         </div>
 
         {/* Steps */}
@@ -89,9 +89,9 @@ export default function HowItWorks() {
           ))}
         </div>
 
-        <p className="mt-10 text-center text-xs text-slate-400">
-          Powered by <span className="font-medium text-slate-500">Llama 3.3 70B</span> via Groq ·{" "}
-          <span className="font-medium text-slate-500">Anakin Wire API</span> · Free, no account required
+        <p className="mt-10 text-center text-xs text-slate-500">
+          Powered by <span className="font-medium text-slate-700">Llama 3.3 70B</span> via Groq ·{" "}
+          <span className="font-medium text-slate-700">Anakin Wire API</span> · Free, no account required
         </p>
       </div>
     </section>

@@ -12,11 +12,11 @@ interface Listing {
 }
 
 const SOURCE_STYLE: Record<string, { stripe: string; badge: string; dot: string }> = {
-  NoBroker:      { stripe: "#16a34a", badge: "border-green-200 bg-green-50 text-green-700",   dot: "bg-green-500"  },
-  OLX:           { stripe: "#9333ea", badge: "border-purple-200 bg-purple-50 text-purple-700", dot: "bg-purple-500" },
-  "Housing.com": { stripe: "#2563eb", badge: "border-blue-200 bg-blue-50 text-blue-700",       dot: "bg-blue-500"   },
+  NoBroker:      { stripe: "#16a34a", badge: "border-green-300 bg-green-100 text-green-800",   dot: "bg-green-600"  },
+  OLX:           { stripe: "#9333ea", badge: "border-purple-300 bg-purple-100 text-purple-800", dot: "bg-purple-600" },
+  "Housing.com": { stripe: "#2563eb", badge: "border-blue-300 bg-blue-100 text-blue-800",       dot: "bg-blue-600"   },
 };
-const DEFAULT_STYLE = { stripe: "#4f46e5", badge: "border-slate-200 bg-slate-50 text-slate-600", dot: "bg-slate-400" };
+const DEFAULT_STYLE = { stripe: "#4f46e5", badge: "border-slate-300 bg-slate-100 text-slate-700", dot: "bg-slate-500" };
 
 function CardContent({ l }: { l: Listing }) {
   const style  = SOURCE_STYLE[l.source] ?? DEFAULT_STYLE;
@@ -25,7 +25,7 @@ function CardContent({ l }: { l: Listing }) {
   return (
     <div className="flex gap-3 items-start min-w-0">
       {/* Rank */}
-      <div className="flex-shrink-0 flex h-7 w-7 items-center justify-center rounded-lg bg-slate-100 text-xs font-bold text-slate-500">
+      <div className="flex-shrink-0 flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-100 text-xs font-bold text-indigo-700">
         {l.rank}
       </div>
 
@@ -34,18 +34,18 @@ function CardContent({ l }: { l: Listing }) {
         <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
           <div className="min-w-0">
             <p className="line-clamp-2 sm:truncate font-semibold text-slate-900 leading-snug">{l.locality_detail}</p>
-            <p className="mt-0.5 text-xs text-slate-400">{l.bhk}</p>
+            <p className="mt-0.5 text-xs text-slate-500">{l.bhk}</p>
           </div>
           <div className="flex-shrink-0 text-right">
             {l.rent != null ? (
               <>
                 <p className="font-display text-lg font-bold text-emerald-600 leading-none">₹{l.rent.toLocaleString("en-IN")}</p>
-                <p className="text-[11px] text-slate-400 mt-0.5">per month</p>
+                <p className="text-[11px] text-slate-500 mt-0.5">per month</p>
               </>
             ) : (
               <>
-                <p className="text-sm font-semibold text-slate-500">See listing</p>
-                <p className="text-[11px] text-slate-400 mt-0.5">for price</p>
+                <p className="text-sm font-semibold text-slate-600">See listing</p>
+                <p className="text-[11px] text-slate-500 mt-0.5">for price</p>
               </>
             )}
           </div>
@@ -53,7 +53,7 @@ function CardContent({ l }: { l: Listing }) {
 
         {/* Commute */}
         {l.commute_note && (
-          <p className="mt-2 flex items-center gap-1.5 text-xs text-slate-400">
+          <p className="mt-2 flex items-center gap-1.5 text-xs text-slate-500">
             <svg viewBox="0 0 24 24" className="h-3 w-3 flex-shrink-0" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
             </svg>
@@ -65,7 +65,7 @@ function CardContent({ l }: { l: Listing }) {
         {l.highlights && l.highlights.length > 0 && (
           <div className="mt-2.5 flex flex-wrap gap-1.5">
             {l.highlights.map((h) => (
-              <span key={h} className="rounded-md border border-slate-200 bg-slate-50 px-2 py-0.5 text-[11px] text-slate-500">{h}</span>
+              <span key={h} className="rounded-md border border-slate-300 bg-slate-100 px-2 py-0.5 text-[11px] text-slate-600">{h}</span>
             ))}
           </div>
         )}
@@ -97,7 +97,7 @@ export default function ListingCards({ listings }: { listings: Listing[] }) {
     <div className="space-y-2.5">
       {listings.map((l) => {
         const style = SOURCE_STYLE[l.source] ?? DEFAULT_STYLE;
-        const base  = "group relative overflow-hidden rounded-xl border border-slate-200 bg-white transition-all duration-200 hover:-translate-y-0.5 hover:border-brand-200 hover:shadow-lift";
+        const base  = "group relative overflow-hidden rounded-xl border border-slate-300 bg-white transition-all duration-200 hover:-translate-y-0.5 hover:border-brand-300 hover:shadow-lift";
 
         const body = (
           <>
