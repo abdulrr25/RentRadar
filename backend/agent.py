@@ -13,7 +13,13 @@ import asyncio
 import json
 import os
 import re
+import warnings
 from typing import TypedDict, List
+
+# Suppress LangGraph internal deprecation warning about checkpoint allowed_objects
+# (fired at import time; we don't use a checkpointer so the default is irrelevant)
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="langgraph")
+warnings.filterwarnings("ignore", message=".*allowed_objects.*")
 
 from langgraph.graph import StateGraph, END
 from groq import Groq
