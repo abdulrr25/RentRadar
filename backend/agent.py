@@ -12,6 +12,7 @@ Groq is free — sign up at console.groq.com.
 import asyncio
 import json
 import os
+import re
 from typing import TypedDict, List
 
 from langgraph.graph import StateGraph, END
@@ -39,8 +40,8 @@ class RentRadarState(TypedDict):
 async def parallel_fetch_node(state: RentRadarState) -> RentRadarState:
     """
     Fires all 6 data fetches simultaneously.
-    - Wire: Reddit, Google News, Hacker News
-    - Universal Scraper: NoBroker, MagicBricks, Housing.com
+    - Wire API:    Reddit, Google News, Hacker News
+    - Search API:  NoBroker, OLX, Housing.com
 
     Uses return_exceptions=True so a single timeout never kills the pipeline.
     """
@@ -119,7 +120,6 @@ async def synthesis_node(state: RentRadarState) -> RentRadarState:
     brief_text = response.choices[0].message.content
 
     # Extract JSON even when the model wraps it in markdown fences
-    import re
     cleaned = brief_text.strip()
     # Try regex first: grab content between first { and last }
     json_match = re.search(r'\{.*\}', cleaned, re.DOTALL)
@@ -141,6 +141,9 @@ async def synthesis_node(state: RentRadarState) -> RentRadarState:
                     listing["source"] = mapped["source"]
                 else:
                     listing["url"] = None
+
+        # Resolve max_rent early so budget filter and budget_note can both use it
+        max_rent = state["query"].get("max_rent")
 
         # Hard budget filter — always enforce regardless of LLM behaviour
         if max_rent:
@@ -173,7 +176,6 @@ async def synthesis_node(state: RentRadarState) -> RentRadarState:
         # Deterministic budget_note handling:
         # - If we have in-budget listings, remove any LLM budget_note (not needed)
         # - If hard filter removed ALL listings, set an honest budget_note
-        max_rent = state["query"].get("max_rent")
         if max_rent:
             if listings:
                 # All remaining listings are in-budget (hard filter ran above)

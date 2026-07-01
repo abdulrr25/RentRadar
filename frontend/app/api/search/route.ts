@@ -13,8 +13,8 @@ export const dynamic = "force-dynamic";
 export async function POST(req: NextRequest) {
   const body = await req.json();
 
-  // Server-only env var — never exposed to the browser bundle
-  const apiUrl = process.env.BACKEND_API_URL ?? "http://localhost:8000";
+  // Server-only env var — set BACKEND_API_URL in .env.local (local) or Vercel dashboard (prod)
+  const apiUrl = process.env.BACKEND_API_URL ?? "http://localhost:9000";
 
   try {
     const upstream = await fetch(`${apiUrl}/search`, {
