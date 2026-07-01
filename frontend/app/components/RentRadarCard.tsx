@@ -147,6 +147,9 @@ export default function RentRadarCard({ rawBrief }: Props) {
           <div className="border-t border-white/[0.06] pt-7">
             <Section title="Locality Scores" icon="📊">
               <LocalityScores scores={brief.locality_scores} />
+              <p className="mt-3 text-[11px] leading-relaxed text-slate-600">
+                Sentiment estimates from Reddit, HN &amp; news — not objective data. Online discussions skew toward tech workers and popular neighbourhoods. Use as a signal, not ground truth.
+              </p>
             </Section>
           </div>
         )}

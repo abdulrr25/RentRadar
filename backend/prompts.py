@@ -4,6 +4,7 @@ Produces a structured JSON rental brief from multi-source raw data.
 """
 
 import json
+import re
 
 # Keep total context well under 8K tokens (Groq free tier: 12K TPM).
 LISTING_SNIPPET_LIMIT = 380   # chars per portal result page
@@ -44,9 +45,41 @@ DIVERSITY RULE (critical): Spread top_listings ACROSS the portals. If NoBroker, 
 
 REF RULE (critical): For every listing set "ref" to the exact [REF] tag shown next to the source page you took it from (e.g. "OLX2"). This is how the listing gets linked to the right page. Do not invent refs.
 
+PRICE RULE (critical): Each listing line below has a [PRICE: ₹X] tag pre-extracted by code from the raw snippet. Use that exact number as the "rent" value. Do NOT invent or infer a price if no [PRICE] tag is present — omit that listing instead.
+
 BUDGET RULE (critical): NEVER include any listing with rent > user's max budget. Hard exclude them — do NOT show them even as alternatives. Sort remaining listings ascending by rent. If EVERY listing found is above budget, return an empty top_listings array and set "budget_note" explaining nothing was available at/under budget.
 
-Other rules: extract real prices only (never invent a number), ignore sale prices like ₹25,00,000 / "Crores" (those are not monthly rent), score locality 1-10 from sentiment, omit fields with no evidence, skip unavailable sources silently."""
+SCORES RULE: locality_scores are estimates derived from community sentiment (Reddit, HN, news) — they reflect what people online say, not objective measurement. Score 1-10 from available evidence only; omit a dimension if no evidence exists.
+
+Other rules: ignore sale prices like ₹25,00,000 / "Crores" (those are not monthly rent), omit fields with no evidence, skip unavailable sources silently."""
+
+
+def _extract_price(text: str) -> str:
+    """
+    Extract the first monthly rent figure from a snippet and return a [PRICE: ₹X]
+    annotation, or empty string if none found.
+
+    Matches patterns like: ₹25,000/month  |  Rs 18000 per month  |  25000/mo
+    Ignores sale prices (contains 'lakh', 'crore', or is > 2,00,000).
+    """
+    patterns = [
+        r'(?:₹|rs\.?)\s*([\d,]+)\s*(?:/\s*(?:month|mo|mon|mnth))',
+        r'([\d,]+)\s*(?:/\s*(?:month|mo|mon|mnth))',
+        r'(?:rent|price)\D{0,10}(?:₹|rs\.?)\s*([\d,]+)',
+        r'(?:₹|rs\.?)\s*([\d,]+)',
+    ]
+    for pattern in patterns:
+        m = re.search(pattern, text, re.IGNORECASE)
+        if m:
+            raw = m.group(1).replace(",", "")
+            try:
+                amount = int(raw)
+                # Ignore sale prices (anything above ₹2,00,000/mo is not rent)
+                if 1000 <= amount <= 200000:
+                    return f"[PRICE: ₹{amount:,}]"
+            except ValueError:
+                continue
+    return ""
 
 
 def _trim(data, limit: int) -> str:
@@ -95,8 +128,12 @@ def build_context(raw_data: list, query: dict):
             ref = f"{prefix}{counters[source]}"
             ref_map[ref] = {"url": res.get("url"), "source": source}
             title = (res.get("title") or "")[:80]
-            snippet = _trim(res.get("snippet", ""), LISTING_SNIPPET_LIMIT)
-            listing_lines.append(f"[{ref}] {source} — {title} | {snippet}")
+            snippet_raw = res.get("snippet", "")
+            price_tag = _extract_price(snippet_raw)
+            snippet = _trim(snippet_raw, LISTING_SNIPPET_LIMIT)
+            # Prepend pre-extracted price so LLM uses ground-truth number
+            line = f"[{ref}] {source} {price_tag} — {title} | {snippet}"
+            listing_lines.append(line)
 
     sentiment_lines = []
     for item in raw_data:
