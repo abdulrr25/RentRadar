@@ -2,136 +2,123 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ── Design tokens ───────────────────────────────────────────────────────── */
 :root {
-  --bg: #07070b;
-  --bg-soft: #0c0c12;
-  --card: rgba(255, 255, 255, 0.025);
-  --border: rgba(255, 255, 255, 0.08);
+  --bg: #06060f;
+  --surface: #0d0d1c;
+  --border: rgba(255, 255, 255, 0.07);
+  --border-hi: rgba(255, 255, 255, 0.13);
   --accent: #6366f1;
-  --accent-2: #8b5cf6;
+  --accent-hi: #818cf8;
 }
 
-* {
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
-}
-
-html {
-  scroll-behavior: smooth;
-}
+/* ── Typography ──────────────────────────────────────────────────────────── */
+* { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+html { scroll-behavior: smooth; }
 
 body {
   background-color: var(--bg);
-  color: #e6e8ef;
-  font-family: var(--font-inter), "Inter", system-ui, -apple-system, sans-serif;
+  color: #dde1f0;
+  font-family: var(--font-inter), "Inter", system-ui, sans-serif;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
   position: relative;
   overflow-x: hidden;
 }
 
-/* ── Hide scrollbar utility (chips row on mobile) ───────────────────────── */
-.scrollbar-none { scrollbar-width: none; }
-.scrollbar-none::-webkit-scrollbar { display: none; }
-
-/* ── Ambient background: layered radial glows + faint grid ─────────────── */
+/* ── Single focused top glow ─────────────────────────────────────────────── */
 body::before {
   content: "";
   position: fixed;
-  inset: 0;
+  top: -18%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 1000px;
+  height: 650px;
   z-index: -2;
-  background:
-    radial-gradient(60rem 40rem at 50% -10%, rgba(99, 102, 241, 0.18), transparent 60%),
-    radial-gradient(40rem 30rem at 85% 10%, rgba(139, 92, 246, 0.12), transparent 55%),
-    radial-gradient(45rem 35rem at 10% 30%, rgba(56, 189, 248, 0.07), transparent 55%);
+  background: radial-gradient(ellipse at 50% 30%,
+    rgba(99, 102, 241, 0.18) 0%,
+    rgba(139, 92, 246, 0.08) 42%,
+    transparent 68%);
   pointer-events: none;
 }
 
+/* ── Dot grid overlay ────────────────────────────────────────────────────── */
 body::after {
   content: "";
   position: fixed;
   inset: 0;
   z-index: -1;
-  background-image:
-    linear-gradient(rgba(255, 255, 255, 0.022) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(255, 255, 255, 0.022) 1px, transparent 1px);
-  background-size: 56px 56px;
-  mask-image: radial-gradient(ellipse 100% 70% at 50% 0%, #000 30%, transparent 75%);
-  -webkit-mask-image: radial-gradient(ellipse 100% 70% at 50% 0%, #000 30%, transparent 75%);
+  background-image: radial-gradient(circle, rgba(255,255,255,0.032) 1px, transparent 1px);
+  background-size: 28px 28px;
+  mask-image: radial-gradient(ellipse 90% 55% at 50% 0%, #000 10%, transparent 68%);
+  -webkit-mask-image: radial-gradient(ellipse 90% 55% at 50% 0%, #000 10%, transparent 68%);
   pointer-events: none;
 }
 
-/* ── Custom scrollbar ─────────────────────────────────────────────────── */
-::-webkit-scrollbar { width: 10px; height: 10px; }
+/* ── Scrollbar ───────────────────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(255,255,255,0.08);
   border-radius: 999px;
   border: 2px solid transparent;
   background-clip: padding-box;
 }
-::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.16); background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.14); background-clip: padding-box; }
 
-/* ── Reusable surfaces ────────────────────────────────────────────────── */
+.scrollbar-none { scrollbar-width: none; }
+.scrollbar-none::-webkit-scrollbar { display: none; }
+
+/* ── Surface classes ─────────────────────────────────────────────────────── */
 .glass {
-  background: var(--card);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  background: rgba(255,255,255,0.03);
+  backdrop-filter: blur(14px) saturate(1.3);
+  -webkit-backdrop-filter: blur(14px) saturate(1.3);
   border: 1px solid var(--border);
 }
 
-.glass-strong {
-  background: rgba(255, 255, 255, 0.04);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
+/* Premium card — solid depth, no blur (better perf + more premium look) */
+.card-surface {
+  background: linear-gradient(160deg, rgba(22,22,42,0.98) 0%, rgba(13,13,26,0.98) 100%);
+  border: 1px solid rgba(255,255,255,0.085);
+  box-shadow:
+    0 0 0 0.5px rgba(255,255,255,0.04) inset,
+    0 48px 100px -32px rgba(0,0,0,0.9),
+    0 12px 40px -12px rgba(0,0,0,0.65);
 }
 
+/* ── Gradient text ───────────────────────────────────────────────────────── */
 .gradient-text {
-  background: linear-gradient(120deg, #818cf8 0%, #a78bfa 45%, #c4b5fd 100%);
+  background: linear-gradient(135deg, #a5b4fc 0%, #818cf8 50%, #c4b5fd 100%);
   -webkit-background-clip: text;
   background-clip: text;
   -webkit-text-fill-color: transparent;
 }
 
-.gradient-border {
-  position: relative;
-}
-.gradient-border::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  padding: 1px;
-  background: linear-gradient(135deg, rgba(129, 140, 248, 0.5), rgba(167, 139, 250, 0.15) 40%, transparent 70%);
-  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
-  -webkit-mask-composite: xor;
-  mask-composite: exclude;
-  pointer-events: none;
-}
-
-/* ── Animations ───────────────────────────────────────────────────────── */
+/* ── Animations ──────────────────────────────────────────────────────────── */
 @keyframes slide-up {
-  from { opacity: 0; transform: translateY(20px); }
+  from { opacity: 0; transform: translateY(18px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-.card-enter { animation: slide-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+.card-enter { animation: slide-up 0.5s cubic-bezier(0.16, 1, 0.3, 1) both; }
 
 @keyframes fade-in {
   from { opacity: 0; }
   to   { opacity: 1; }
 }
-.fade-in { animation: fade-in 0.6s ease-out forwards; }
+.fade-in { animation: fade-in 0.5s ease-out forwards; }
 
 @keyframes rise {
   from { opacity: 0; transform: translateY(14px); }
   to   { opacity: 1; transform: translateY(0); }
 }
-.rise { opacity: 0; animation: rise 0.55s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
+.rise { opacity: 0; animation: rise 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards; }
 
 @keyframes pill-pulse {
   0%, 100% { opacity: 1; }
-  50%      { opacity: 0.45; }
+  50%      { opacity: 0.4; }
 }
-.pill-fetching { animation: pill-pulse 1.2s ease-in-out infinite; }
+.pill-fetching { animation: pill-pulse 1.4s ease-in-out infinite; }
 
 @keyframes shimmer {
   100% { transform: translateX(100%); }
@@ -142,52 +129,25 @@ body::after {
   position: absolute;
   inset: 0;
   transform: translateX(-100%);
-  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.06), transparent);
-  animation: shimmer 1.6s infinite;
+  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.045), transparent);
+  animation: shimmer 1.8s infinite;
 }
 
-@keyframes float {
-  0%, 100% { transform: translateY(0); }
-  50%      { transform: translateY(-6px); }
-}
-.float { animation: float 6s ease-in-out infinite; }
+.score-bar-fill { transition: width 1.2s cubic-bezier(0.16, 1, 0.3, 1); }
 
-.score-bar-fill { transition: width 1s cubic-bezier(0.16, 1, 0.3, 1); }
-
-/* Staggered entrance helpers */
-.delay-1 { animation-delay: 0.05s; }
+.delay-1 { animation-delay: 0.06s; }
 .delay-2 { animation-delay: 0.12s; }
-.delay-3 { animation-delay: 0.19s; }
-.delay-4 { animation-delay: 0.26s; }
-.delay-5 { animation-delay: 0.33s; }
+.delay-3 { animation-delay: 0.18s; }
+.delay-4 { animation-delay: 0.24s; }
+.delay-5 { animation-delay: 0.30s; }
 
-/* ── Mobile performance: reduce GPU-intensive effects on small screens ──── */
+/* ── Mobile optimisations ─────────────────────────────────────────────────── */
 @media (max-width: 640px) {
-  /* Smaller ambient glow gradients — less GPU fill */
-  body::before {
-    background:
-      radial-gradient(30rem 20rem at 50% -10%, rgba(99, 102, 241, 0.14), transparent 60%),
-      radial-gradient(20rem 15rem at 85% 10%, rgba(139, 92, 246, 0.08), transparent 55%);
-  }
-
-  /* Reduce backdrop-blur cost on mobile */
-  .glass {
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
-  }
-  .glass-strong {
-    backdrop-filter: blur(10px);
-    -webkit-backdrop-filter: blur(10px);
-  }
-
-  /* Faster card entrance on mobile */
+  body::before { width: 380px; height: 300px; }
   .card-enter { animation-duration: 0.3s; }
-
-  /* Disable heavy gradient border mask on mobile */
-  .gradient-border::before { display: none; }
 }
 
-/* ── Respect reduced-motion preference ─────────────────────────────────── */
+/* ── Reduced motion ──────────────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {
   *, ::before, ::after {
     animation-duration: 0.01ms !important;
