@@ -40,7 +40,7 @@ function SectionHeading({ icon, title }: { icon: React.ReactNode; title: string 
 }
 
 function Divider() {
-  return <div className="border-t border-slate-100 mx-5 sm:mx-7" />;
+  return <div className="border-t border-slate-200 mx-5 sm:mx-7" />;
 }
 
 export default function RentRadarCard({ rawBrief }: Props) {
@@ -147,7 +147,7 @@ export default function RentRadarCard({ rawBrief }: Props) {
               </svg>
             } />
             <LocalityScores scores={brief.locality_scores} />
-            <p className="mt-4 text-[11px] text-slate-400 leading-relaxed">
+            <p className="mt-4 text-[11px] text-slate-500 leading-relaxed">
               Estimates from Reddit, HN &amp; news — not objective data. Online discussions skew toward tech workers and popular neighbourhoods.
             </p>
           </div>

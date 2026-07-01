@@ -11,12 +11,12 @@ interface Props {
 const LISTING_SOURCES = new Set(["NoBroker", "OLX", "Housing.com"]);
 
 function pill(status: SourceStatus, isSentiment: boolean) {
-  if (status === "ok")       return "border-emerald-200 bg-emerald-50 text-emerald-700";
-  if (status === "fetching") return "border-brand-200 bg-brand-50 text-brand-700 pill-fetching";
+  if (status === "ok")       return "border-emerald-300 bg-emerald-100 text-emerald-800";
+  if (status === "fetching") return "border-brand-300 bg-brand-100 text-brand-700 pill-fetching";
   if (status === "error")    return isSentiment
-    ? "border-amber-200 bg-amber-50 text-amber-700"   // sentiment fail = amber (optional)
-    : "border-red-200 bg-red-50 text-red-600";         // listing fail  = red (critical)
-  return "border-slate-200 bg-white text-slate-400";
+    ? "border-amber-300 bg-amber-100 text-amber-800"   // sentiment fail = amber (optional)
+    : "border-red-300 bg-red-100 text-red-700";         // listing fail  = red (critical)
+  return "border-slate-200 bg-white text-slate-500";
 }
 
 function StatusIcon({ status, isSentiment }: { status: SourceStatus; isSentiment: boolean }) {
@@ -59,7 +59,7 @@ export default function SourceIndicators({ sources, statuses }: Props) {
           </p>
           <span className="text-xs font-semibold text-slate-600 tabular-nums">{done}/{total}</span>
         </div>
-        <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-100">
+        <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-200">
           <div
             className="h-full rounded-full transition-all duration-500"
             style={{

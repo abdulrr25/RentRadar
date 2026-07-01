@@ -5,7 +5,7 @@ Graph:
   parallel_fetch_node  →  synthesis_node  →  END
 
 Node 1 fires 6 async fetches simultaneously (Wire + Universal Scraper).
-Node 2 sends all raw data to Groq (Llama 3.1 70B) for structured synthesis.
+Node 2 sends all raw data to Groq (Llama 3.3 70B) for structured synthesis.
 Groq is free — sign up at console.groq.com.
 """
 

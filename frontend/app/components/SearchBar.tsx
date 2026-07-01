@@ -72,7 +72,7 @@ export default function SearchBar({ onSearch, loading }: Props) {
 
       {/* Example chips */}
       <div className="flex items-center gap-2 overflow-x-auto scrollbar-none -mx-1 px-1 pb-0.5">
-        <span className="flex-shrink-0 text-xs text-slate-400 font-medium">Try:</span>
+        <span className="flex-shrink-0 text-xs text-slate-600 font-medium">Try:</span>
         {EXAMPLES.map((ex) => (
           <button
             key={ex}

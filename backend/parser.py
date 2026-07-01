@@ -7,13 +7,33 @@ import re
 
 
 BANGALORE_LOCALITIES = [
-    "Bellandur", "Koramangala", "Indiranagar", "HSR Layout",
-    "Whitefield", "Electronic City", "Marathahalli", "BTM Layout",
-    "Sarjapur", "Haralur", "Hebbal", "Yelahanka", "Jayanagar",
-    "JP Nagar", "Bannerghatta", "Domlur", "Madiwala", "Bommanahalli",
-    "Kadugodi", "Brookefield", "Kundalahalli", "Mahadevapura",
-    "Kadubeesanahalli", "Panathur", "Varthur", "Devarabeesanahalli",
-    "Kasavanahalli", "Halanayakanahalli", "Nagawara", "Thanisandra",
+    # East / Whitefield corridor
+    "Whitefield", "Marathahalli", "Brookefield", "Kadugodi", "Kundalahalli",
+    "Mahadevapura", "Kadubeesanahalli", "Panathur", "Varthur",
+    "Devarabeesanahalli", "Kasavanahalli", "Halanayakanahalli",
+    # South / Outer Ring Road
+    "Bellandur", "Sarjapur", "Haralur", "Bommanahalli", "Electronic City",
+    "Bannerghatta", "Hulimavu", "Begur", "Neeladri Nagar",
+    # Central South
+    "HSR Layout", "BTM Layout", "Koramangala", "Jayanagar", "JP Nagar",
+    "Banashankari", "Padmanabhanagar", "Basavanagudi", "Girinagar",
+    "Wilson Garden", "Langford Town",
+    # Central / CBD
+    "Indiranagar", "Domlur", "Madiwala", "Ejipura", "Vivek Nagar",
+    "Richmond Town", "Shivajinagar", "MG Road", "UB City", "Lavelle Road",
+    # North
+    "Hebbal", "Yelahanka", "Thanisandra", "Nagawara", "Sahakara Nagar",
+    "Devanahalli", "HBR Layout", "Kalyan Nagar", "RT Nagar",
+    "Banaswadi", "CV Raman Nagar", "Ramamurthy Nagar",
+    # West
+    "Rajajinagar", "Vijayanagar", "Nagarbhavi", "Kengeri", "Uttarahalli",
+    "Yeshwanthpur", "Malleshwaram", "Sadashivanagar", "Dollars Colony",
+    "RPC Layout", "Chord Road",
+    # North West
+    "Peenya", "Tumkur Road", "Hesaraghatta", "Jalahalli",
+    # Tech parks / micro-localities
+    "Manyata Tech Park", "Embassy Tech Village", "Prestige Tech Park",
+    "ITPL", "Bagmane Tech Park",
 ]
 
 
