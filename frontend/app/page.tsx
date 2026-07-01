@@ -166,7 +166,7 @@ export default function Home() {
 
         {/* ── Divider ───────────────────────────────────────────────────── */}
         {(sources.length > 0 || brief) && (
-          <div className="border-t border-slate-100" />
+          <div className="border-t border-slate-300" />
         )}
 
         {/* ── Source indicators ──────────────────────────────────────────── */}

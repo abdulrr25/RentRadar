@@ -41,7 +41,7 @@ const SOURCES = [
 
 export default function HowItWorks() {
   return (
-    <section className="border-t border-slate-100 bg-white">
+    <section className="border-t border-slate-300 bg-white">
       <div className="mx-auto max-w-5xl px-4 sm:px-6 py-20">
 
         {/* Source trust strip */}

@@ -164,7 +164,7 @@ export default function RentRadarCard({ rawBrief }: Props) {
                 <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
               </svg>
             } />
-            <blockquote className="rounded-xl border-l-4 border-brand-500 bg-slate-50 border border-slate-200 pl-4 pr-4 py-3 text-sm italic leading-relaxed text-slate-700">
+            <blockquote className="rounded-xl border border-slate-200 border-l-4 border-l-brand-500 bg-slate-50 pl-4 pr-4 py-3 text-sm italic leading-relaxed text-slate-700">
               {brief.reddit_pulse}
             </blockquote>
           </div>
@@ -261,7 +261,7 @@ export default function RentRadarCard({ rawBrief }: Props) {
               <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>
             </svg>
           } />
-          <div className="rounded-xl border-l-4 border-brand-500 border border-slate-200 bg-slate-50 p-5">
+          <div className="rounded-xl border border-slate-200 border-l-4 border-l-brand-500 bg-slate-50 p-5">
             <p className="text-sm leading-[1.75] text-slate-800">{brief.verdict}</p>
           </div>
         </div>
