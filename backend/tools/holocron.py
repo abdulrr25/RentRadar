@@ -10,6 +10,7 @@ Verified action IDs (from wire_catalog / wire_discover):
 """
 
 import asyncio
+import time
 import httpx
 import os
 
@@ -27,9 +28,12 @@ def _headers() -> dict:
 
 
 async def _poll_job(client: httpx.AsyncClient, job_id: str) -> dict:
-    """Poll a Wire job until completed/failed or timeout."""
-    deadline = asyncio.get_event_loop().time() + POLL_TIMEOUT
-    while asyncio.get_event_loop().time() < deadline:
+    """Poll a Wire job until completed/failed or timeout.
+    Uses wall-clock time (time.monotonic) not event-loop time, which is
+    unreliable on Windows and after long awaits.
+    """
+    deadline = time.monotonic() + POLL_TIMEOUT
+    while time.monotonic() < deadline:
         resp = await client.get(f"{WIRE_BASE}/jobs/{job_id}", headers=_headers())
         resp.raise_for_status()
         data = resp.json()
@@ -57,7 +61,7 @@ async def wire_action(action_id: str, params: dict, source_name: str) -> dict:
 
             job_id = job.get("job_id")
             if not job_id:
-                # Some actions return results immediately
+                # Some actions return results immediately (no polling needed)
                 return {"source": source_name, "status": "ok", "data": job}
 
             # Poll for result
@@ -82,7 +86,7 @@ async def fetch_google_news(locality: str) -> dict:
     """Wire → gn_search — Google News for rental market signals."""
     return await wire_action(
         action_id="gn_search",
-        params={"query": f"{locality} Bangalore rent property", "limit": 10},
+        params={"query": f"{locality} Bangalore rent property 2024", "limit": 10},
         source_name="Google News",
     )
 
@@ -91,6 +95,6 @@ async def fetch_hackernews(locality: str) -> dict:
     """Wire → hn_search — Hacker News for tech-worker perspectives."""
     return await wire_action(
         action_id="hn_search",
-        params={"query": f"Bangalore {locality} living"},
+        params={"query": f"Bangalore {locality} living rent"},
         source_name="Hacker News",
     )

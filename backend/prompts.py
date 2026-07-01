@@ -79,7 +79,7 @@ def _extract_price(text: str) -> str:
             try:
                 amount = int(raw)
                 # Valid monthly rent range for Bangalore: ₹5,000–₹2,00,000
-                if 5000 <= amount <= 200000:
+                if 3000 <= amount <= 200000:
                     return f"[PRICE: ₹{amount:,}]"
             except ValueError:
                 continue
@@ -127,7 +127,7 @@ def build_context(raw_data: list, query: dict):
             listing_lines.append(f"[{source}] no results")
             continue
         prefix = SRC_PREFIX.get(source, source[:2].upper())
-        for res in item["results"][:3]:
+        for res in item["results"][:5]:
             counters[source] = counters.get(source, 0) + 1
             ref = f"{prefix}{counters[source]}"
             ref_map[ref] = {"url": res.get("url"), "source": source}

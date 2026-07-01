@@ -56,7 +56,7 @@ async def parallel_fetch_node(state: RentRadarState) -> RentRadarState:
         fetch_hackernews(locality),
         fetch_nobroker(locality, bhk, max_rent),
         fetch_olx(locality, bhk, max_rent),
-        fetch_housing(locality, bhk),
+        fetch_housing(locality, bhk, max_rent),
         return_exceptions=True,
     )
 
@@ -82,9 +82,19 @@ async def parallel_fetch_node(state: RentRadarState) -> RentRadarState:
 
 # ── Node 2: LLM Synthesis ───────────────────────────────────────────────────
 
+def _to_int_rent(val) -> int | None:
+    """Coerce LLM rent value (int or string) to int; return None if unparseable."""
+    if val is None:
+        return None
+    try:
+        return int(val)
+    except (ValueError, TypeError):
+        return None
+
+
 async def synthesis_node(state: RentRadarState) -> RentRadarState:
     """
-    Sends all raw data to Groq (Llama 3.1 70B) for structured synthesis.
+    Sends all raw data to Groq (Llama 3.3 70B) for structured synthesis.
     Groq is free — no credits needed.
     """
     # If every data source failed (e.g. Anakin quota exhausted / network down),
@@ -148,18 +158,11 @@ async def synthesis_node(state: RentRadarState) -> RentRadarState:
         # Hard budget filter — always enforce regardless of LLM behaviour.
         # Coerce string rents (LLM occasionally returns "25000") to int first.
         if max_rent:
-            def _rent_val(l: dict):
-                r = l.get("rent")
-                try:
-                    return int(r) if r is not None else None
-                except (ValueError, TypeError):
-                    return None
-
             filtered = []
             for l in listings:
-                rv = _rent_val(l)
+                rv = _to_int_rent(l.get("rent"))
                 if rv is not None:
-                    l["rent"] = rv          # normalise to int in-place
+                    l["rent"] = rv      # normalise to int in-place
                     if rv <= max_rent:
                         filtered.append(l)
             listings = filtered

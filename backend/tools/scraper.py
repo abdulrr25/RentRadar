@@ -22,7 +22,7 @@ def _headers() -> dict:
     }
 
 
-async def _search(prompt: str, source_name: str, limit: int = 5) -> dict:
+async def _search(prompt: str, source_name: str, limit: int = 6) -> dict:
     """
     Run an Anakin web search and return a list of structured results.
 
@@ -49,7 +49,8 @@ async def _search(prompt: str, source_name: str, limit: int = 5) -> dict:
             ]
 
             if not results:
-                return {"source": source_name, "status": "error", "results": []}
+                return {"source": source_name, "status": "error", "results": [],
+                        "error": "No results returned by search API"}
 
             return {"source": source_name, "status": "ok", "results": results}
     except Exception as e:
@@ -57,35 +58,30 @@ async def _search(prompt: str, source_name: str, limit: int = 5) -> dict:
 
 
 async def fetch_nobroker(locality: str, bhk: str, max_rent: int) -> dict:
-    """Search NoBroker individual property pages via Anakin web search.
-    Targeting /property/ paths returns single-listing detail pages rather than
-    category/search pages, so each URL links to one specific ad.
-    """
+    """Search NoBroker individual property pages via Anakin web search."""
     prompt = (
         f'site:nobroker.in/property {bhk} rent {locality} Bangalore '
         f'₹{max_rent} per month owner'
     )
-    return await _search(prompt, "NoBroker", limit=6)
+    return await _search(prompt, "NoBroker")
 
 
 async def fetch_olx(locality: str, bhk: str, max_rent: int) -> dict:
     """Search OLX individual ad pages.
-    OLX ad URLs contain /item/ — including that in the query pushes the search
-    engine to return individual ads rather than category listing pages.
+    OLX ad URLs contain /item/ — this steers results to individual ads
+    rather than category/search landing pages.
     """
     prompt = (
         f'site:olx.in/item {bhk} for rent {locality} Bangalore '
-        f'₹{max_rent} month furnished'
+        f'₹{max_rent} month'
     )
-    return await _search(prompt, "OLX", limit=6)
+    return await _search(prompt, "OLX")
 
 
-async def fetch_housing(locality: str, bhk: str) -> dict:
-    """Search Housing.com individual property detail pages.
-    /rent/property-detail paths are single-property pages with exact price shown.
-    """
+async def fetch_housing(locality: str, bhk: str, max_rent: int) -> dict:
+    """Search Housing.com individual property detail pages."""
     prompt = (
         f'site:housing.com {bhk} for rent {locality} Bangalore '
-        f'rent deposit semifurnished'
+        f'₹{max_rent} per month rent deposit'
     )
-    return await _search(prompt, "Housing.com", limit=6)
+    return await _search(prompt, "Housing.com")

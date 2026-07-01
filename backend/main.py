@@ -8,7 +8,7 @@ GET  /health  — liveness check; validates required env vars are present.
 import json
 import asyncio
 import os
-import traceback
+import logging
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -24,12 +24,18 @@ load_dotenv(Path(__file__).parent.parent / ".env")
 from parser import parse_query
 from agent import agent
 
+logger = logging.getLogger("rentradar")
+
 app = FastAPI(title="RentRadar API", version="1.0.0")
 
+# CORS: allow local dev + any Vercel preview/prod deployment
+# Add EXTRA_ORIGINS env var (comma-separated) for custom domains
+_extra = [o.strip() for o in os.getenv("EXTRA_ORIGINS", "").split(",") if o.strip()]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000"],
+    allow_origins=["http://localhost:3000", *_extra],
     allow_origin_regex=r"https://.*\.(vercel\.app|onrender\.com)",
+    allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -55,7 +61,7 @@ async def search(request: SearchRequest):
       source_complete — per-source status as each finishes
       brief           — final synthesized JSON string
       done            — stream end signal
-      error           — pipeline error (non-fatal partial errors are swallowed)
+      error           — pipeline error message (no internal details exposed)
     """
 
     async def stream():
@@ -92,8 +98,9 @@ async def search(request: SearchRequest):
             yield f"data: {json.dumps({'type': 'done'})}\n\n"
 
         except Exception as e:
-            tb = traceback.format_exc()
-            yield f"data: {json.dumps({'type': 'error', 'message': str(e), 'detail': tb})}\n\n"
+            # Log full traceback server-side; send only a safe message to client
+            logger.exception("Pipeline error for query: %s", request.query)
+            yield f"data: {json.dumps({'type': 'error', 'message': 'An error occurred while processing your request. Please try again.'})}\n\n"
 
     return StreamingResponse(
         stream(),

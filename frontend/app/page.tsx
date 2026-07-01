@@ -97,8 +97,11 @@ export default function Home() {
         }
       }
     } catch (err: any) {
-      if (err?.name !== "AbortError") {
-        setError("Failed to connect to the server. Make sure the backend is running.");
+      if (err?.name === "AbortError") {
+        // User cancelled — clear any stale error from a previous search
+        setError(null);
+      } else {
+        setError("Backend unreachable — please check the server is running and try again.");
       }
     } finally {
       setLoading(false);
