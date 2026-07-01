@@ -98,7 +98,7 @@ export default function RentRadarCard({ rawBrief }: Props) {
   return (
     <div className="card-enter mx-auto mt-8 w-full max-w-2xl overflow-hidden rounded-3xl border border-white/[0.08] bg-white/[0.025] shadow-lift backdrop-blur-xl">
       {/* ── Header ──────────────────────────────────────────────────── */}
-      <div className="relative border-b border-white/[0.06] px-6 py-6">
+      <div className="relative border-b border-white/[0.06] px-4 sm:px-6 py-5 sm:py-6">
         <div className="pointer-events-none absolute inset-0 bg-gradient-to-br from-indigo-500/[0.08] via-transparent to-transparent" />
         <div className="relative flex items-start justify-between gap-4">
           <div className="min-w-0">
@@ -129,7 +129,7 @@ export default function RentRadarCard({ rawBrief }: Props) {
       </div>
 
       {/* ── Body ────────────────────────────────────────────────────── */}
-      <div className="space-y-7 px-6 py-6">
+      <div className="space-y-6 sm:space-y-7 px-4 sm:px-6 py-5 sm:py-6">
         {brief.budget_note && (
           <div className="flex items-start gap-2 rounded-xl border border-amber-700/40 bg-amber-950/30 p-3 text-sm text-amber-300">
             <span className="flex-shrink-0">💸</span>

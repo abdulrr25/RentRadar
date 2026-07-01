@@ -68,15 +68,15 @@ export default function SearchBar({ onSearch, loading }: Props) {
         </div>
       </div>
 
-      {/* Example chips */}
-      <div className="flex flex-wrap justify-center gap-2">
-        <span className="py-1.5 text-xs text-slate-500">Try:</span>
+      {/* Example chips — scrollable row on mobile */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-none -mx-1 px-1">
+        <span className="flex-shrink-0 py-1.5 text-xs text-slate-500">Try:</span>
         {EXAMPLES.map((ex) => (
           <button
             key={ex}
             onClick={() => setQuery(ex)}
             disabled={loading}
-            className="rounded-lg border border-white/[0.07] bg-white/[0.03] px-3 py-1.5 text-xs text-slate-400 transition hover:border-indigo-500/40 hover:bg-indigo-500/10 hover:text-slate-100 disabled:opacity-50"
+            className="flex-shrink-0 rounded-lg border border-white/[0.07] bg-white/[0.03] px-3 py-1.5 text-xs text-slate-400 transition hover:border-indigo-500/40 hover:bg-indigo-500/10 hover:text-slate-100 disabled:opacity-50"
           >
             {ex}
           </button>

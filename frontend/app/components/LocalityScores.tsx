@@ -37,7 +37,7 @@ function ScoreRow({
   return (
     <div className="flex items-center gap-3">
       <span
-        className={`w-32 flex-shrink-0 text-sm ${
+        className={`w-24 sm:w-32 flex-shrink-0 text-xs sm:text-sm ${
           emphasis ? "font-semibold text-slate-200" : "text-slate-400"
         }`}
       >

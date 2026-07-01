@@ -28,6 +28,10 @@ body {
   overflow-x: hidden;
 }
 
+/* ── Hide scrollbar utility (chips row on mobile) ───────────────────────── */
+.scrollbar-none { scrollbar-width: none; }
+.scrollbar-none::-webkit-scrollbar { display: none; }
+
 /* ── Ambient background: layered radial glows + faint grid ─────────────── */
 body::before {
   content: "";
@@ -156,3 +160,38 @@ body::after {
 .delay-3 { animation-delay: 0.19s; }
 .delay-4 { animation-delay: 0.26s; }
 .delay-5 { animation-delay: 0.33s; }
+
+/* ── Mobile performance: reduce GPU-intensive effects on small screens ──── */
+@media (max-width: 640px) {
+  /* Smaller ambient glow gradients — less GPU fill */
+  body::before {
+    background:
+      radial-gradient(30rem 20rem at 50% -10%, rgba(99, 102, 241, 0.14), transparent 60%),
+      radial-gradient(20rem 15rem at 85% 10%, rgba(139, 92, 246, 0.08), transparent 55%);
+  }
+
+  /* Reduce backdrop-blur cost on mobile */
+  .glass {
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+  }
+  .glass-strong {
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+  }
+
+  /* Faster card entrance on mobile */
+  .card-enter { animation-duration: 0.3s; }
+
+  /* Disable heavy gradient border mask on mobile */
+  .gradient-border::before { display: none; }
+}
+
+/* ── Respect reduced-motion preference ─────────────────────────────────── */
+@media (prefers-reduced-motion: reduce) {
+  *, ::before, ::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}

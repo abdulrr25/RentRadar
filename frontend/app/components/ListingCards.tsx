@@ -22,14 +22,14 @@ function ListingBody({ l }: { l: Listing }) {
   return (
     <>
       {/* Rank badge */}
-      <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500/20 to-violet-500/10 text-sm font-bold text-indigo-300 ring-1 ring-white/10">
+      <div className="flex h-7 w-7 sm:h-9 sm:w-9 flex-shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500/20 to-violet-500/10 text-sm font-bold text-indigo-300 ring-1 ring-white/10">
         {l.rank}
       </div>
 
       <div className="min-w-0 flex-1">
         <div className="flex flex-wrap items-start justify-between gap-2">
           <div className="min-w-0">
-            <p className="truncate font-semibold text-slate-100">{l.locality_detail}</p>
+            <p className="line-clamp-2 sm:truncate font-semibold text-slate-100">{l.locality_detail}</p>
             {l.commute_note && (
               <p className="mt-0.5 text-xs text-slate-500">{l.commute_note}</p>
             )}
@@ -87,14 +87,14 @@ export default function ListingCards({ listings }: { listings: Listing[] }) {
             target="_blank"
             rel="noopener noreferrer"
             title={`View on ${l.source}`}
-            className="group flex items-start gap-4 rounded-2xl border border-white/[0.07] bg-white/[0.02] p-4 transition duration-200 hover:-translate-y-0.5 hover:border-indigo-500/40 hover:bg-white/[0.045] hover:shadow-glow-sm"
+            className="group flex items-start gap-3 sm:gap-4 rounded-2xl border border-white/[0.07] bg-white/[0.02] p-3 sm:p-4 transition duration-200 hover:-translate-y-0.5 hover:border-indigo-500/40 hover:bg-white/[0.045] hover:shadow-glow-sm"
           >
             <ListingBody l={l} />
           </a>
         ) : (
           <div
             key={l.rank}
-            className="group flex items-start gap-4 rounded-2xl border border-white/[0.07] bg-white/[0.02] p-4 transition duration-200 hover:border-white/15"
+            className="group flex items-start gap-3 sm:gap-4 rounded-2xl border border-white/[0.07] bg-white/[0.02] p-3 sm:p-4 transition duration-200 hover:border-white/15"
           >
             <ListingBody l={l} />
           </div>

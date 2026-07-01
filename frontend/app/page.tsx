@@ -112,7 +112,7 @@ export default function Home() {
     <div className="relative min-h-screen flex flex-col">
       {/* ── Nav ─────────────────────────────────────────────────────── */}
       <header className="sticky top-0 z-30 border-b border-white/[0.06] bg-radar-bg/70 backdrop-blur-xl">
-        <div className="mx-auto max-w-6xl px-5 h-16 flex items-center justify-between">
+        <div className="mx-auto max-w-6xl px-4 sm:px-5 h-14 sm:h-16 flex items-center justify-between">
           <a href="/" className="flex items-center gap-2.5 group">
             <span className="relative flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-500 to-violet-600 shadow-glow-sm">
               <svg viewBox="0 0 24 24" className="h-4 w-4 text-white" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
@@ -145,13 +145,13 @@ export default function Home() {
 
       <main className="flex-1">
         {/* ── Hero ──────────────────────────────────────────────────── */}
-        <section className="mx-auto max-w-3xl px-5 pt-16 pb-8 sm:pt-24 text-center">
+        <section className="mx-auto max-w-3xl px-4 sm:px-5 pt-10 pb-8 sm:pt-20 md:pt-24 text-center">
           <div className="rise inline-flex items-center gap-2 rounded-full border border-indigo-500/25 bg-indigo-500/10 px-3.5 py-1.5 text-xs font-medium text-indigo-200">
             <span className="h-1.5 w-1.5 rounded-full bg-indigo-400 animate-pulse" />
             Anakin Wire · Universal Scraper · Llama 3.3 70B
           </div>
 
-          <h1 className="rise delay-1 mt-7 font-display text-5xl sm:text-6xl font-extrabold leading-[1.05] tracking-tight text-white">
+          <h1 className="rise delay-1 mt-6 sm:mt-7 font-display text-4xl sm:text-5xl md:text-6xl font-extrabold leading-[1.08] tracking-tight text-white">
             Find your Bangalore flat,
             <br className="hidden sm:block" />
             <span className="gradient-text"> intelligently.</span>
