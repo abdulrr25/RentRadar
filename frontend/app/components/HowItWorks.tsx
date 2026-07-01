@@ -8,7 +8,7 @@ const STEPS = [
       </svg>
     ),
     title: "Ask in plain English",
-    body: "Type what you need — "2BHK near Bellandur under ₹25,000". No forms, no filters, no friction.",
+    body: 'Type what you need — "2BHK near Bellandur under ₹25,000". No forms, no filters, no friction.',
   },
   {
     icon: (
