@@ -18,15 +18,8 @@ const sora = Sora({
 export const metadata: Metadata = {
   title: "RentRadar — AI Rental Intelligence for Bangalore",
   description:
-    "Find your Bangalore flat instantly. RentRadar scans NoBroker, OLX, Housing.com, Reddit and news in real time to surface listings, locality scores, price trends and scam alerts.",
-  keywords: [
-    "Bangalore rent",
-    "flat for rent Bangalore",
-    "rental intelligence",
-    "NoBroker",
-    "Housing.com",
-    "AI rental search",
-  ],
+    "Find your Bangalore flat instantly. RentRadar scans NoBroker, OLX, Housing.com, Reddit and news in real time to surface ranked listings, locality scores, price trends and scam alerts.",
+  keywords: ["Bangalore rent", "flat for rent Bangalore", "rental intelligence", "NoBroker", "Housing.com", "AI rental search"],
   openGraph: {
     title: "RentRadar — AI Rental Intelligence for Bangalore",
     description: "Find your Bangalore flat. Instantly.",
@@ -37,7 +30,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className={`${inter.variable} ${sora.variable}`}>
-      <body className="min-h-screen bg-radar-bg text-slate-200 font-sans antialiased selection:bg-indigo-500/30 selection:text-white">
+      <body className="min-h-screen bg-[#f7f8fb] text-slate-900 font-sans antialiased selection:bg-indigo-100 selection:text-indigo-900">
         {children}
       </body>
     </html>

@@ -26,86 +26,74 @@ const STEPS = [
       </svg>
     ),
     title: "One intelligent brief",
-    body: "Ranked listings with real prices, locality scores, community pulse, price trend and scam alerts — one place.",
+    body: "Ranked listings with real prices, locality scores, community pulse, price trend and scam alerts — all in one place.",
   },
 ];
 
 const SOURCES = [
-  { name: "NoBroker",    color: "#22c55e" },
-  { name: "OLX",         color: "#a855f7" },
-  { name: "Housing.com", color: "#3b82f6" },
-  { name: "Reddit",      color: "#f97316" },
-  { name: "Google News", color: "#6366f1" },
-  { name: "Hacker News", color: "#f59e0b" },
+  { name: "NoBroker",    dot: "#16a34a" },
+  { name: "OLX",         dot: "#9333ea" },
+  { name: "Housing.com", dot: "#2563eb" },
+  { name: "Reddit",      dot: "#ea580c" },
+  { name: "Google News", dot: "#4f46e5" },
+  { name: "Hacker News", dot: "#d97706" },
 ];
 
 export default function HowItWorks() {
   return (
-    <section className="mx-auto max-w-5xl px-4 sm:px-6 pb-24">
+    <section className="border-t border-slate-100 bg-white">
+      <div className="mx-auto max-w-5xl px-4 sm:px-6 py-20">
 
-      {/* Source trust strip */}
-      <div className="mb-16 flex flex-col items-center gap-5">
-        <p className="text-[10.5px] uppercase tracking-[0.22em] text-slate-600">
-          Aggregating real-time data from
-        </p>
-        <div className="flex flex-wrap items-center justify-center gap-2">
-          {SOURCES.map((s) => (
-            <span
-              key={s.name}
-              className="flex items-center gap-2 rounded-full px-4 py-1.5 text-sm font-medium text-slate-400 border border-white/[0.07]"
-              style={{ background: "rgba(255,255,255,0.025)" }}
+        {/* Source trust strip */}
+        <div className="mb-16 flex flex-col items-center gap-5">
+          <p className="text-[10.5px] font-semibold uppercase tracking-[0.22em] text-slate-400">
+            Aggregating real-time data from
+          </p>
+          <div className="flex flex-wrap items-center justify-center gap-2">
+            {SOURCES.map((s) => (
+              <span key={s.name} className="flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-4 py-1.5 text-sm font-medium text-slate-600">
+                <span className="h-1.5 w-1.5 rounded-full" style={{ background: s.dot }} />
+                {s.name}
+              </span>
+            ))}
+          </div>
+        </div>
+
+        {/* Heading */}
+        <div className="text-center mb-10">
+          <h2 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">How RentRadar works</h2>
+          <p className="mt-2 text-sm text-slate-400">From question to decision in three steps.</p>
+        </div>
+
+        {/* Steps */}
+        <div className="grid gap-4 sm:grid-cols-3">
+          {STEPS.map((step, i) => (
+            <div
+              key={step.title}
+              className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 transition-all duration-200 hover:border-brand-200 hover:shadow-lift"
+              style={{ boxShadow: "0 1px 3px rgba(15,23,42,0.06)" }}
             >
-              <span className="h-1.5 w-1.5 rounded-full" style={{ background: s.color }} />
-              {s.name}
-            </span>
+              {/* Watermark step number */}
+              <span className="absolute top-3 right-4 font-display text-7xl font-black text-slate-50 select-none pointer-events-none leading-none">
+                {i + 1}
+              </span>
+
+              <div className="relative mb-5 flex h-11 w-11 items-center justify-center rounded-xl bg-brand-50 border border-brand-100 text-brand-600">
+                {step.icon}
+              </div>
+
+              <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.18em] text-brand-500">Step {i + 1}</p>
+              <h3 className="font-display text-base font-semibold text-slate-900">{step.title}</h3>
+              <p className="mt-2 text-sm leading-relaxed text-slate-500">{step.body}</p>
+            </div>
           ))}
         </div>
+
+        <p className="mt-10 text-center text-xs text-slate-400">
+          Powered by <span className="font-medium text-slate-500">Llama 3.3 70B</span> via Groq ·{" "}
+          <span className="font-medium text-slate-500">Anakin Wire API</span> · Free, no account required
+        </p>
       </div>
-
-      {/* How it works */}
-      <div className="text-center mb-10">
-        <h2 className="font-display text-2xl sm:text-3xl font-bold tracking-tight text-white">
-          How RentRadar works
-        </h2>
-        <p className="mt-2 text-sm text-slate-500">From question to decision in three steps.</p>
-      </div>
-
-      <div className="grid gap-4 sm:grid-cols-3">
-        {STEPS.map((step, i) => (
-          <div
-            key={step.title}
-            className="group relative overflow-hidden rounded-2xl border border-white/[0.075] p-6 transition-all duration-300 hover:border-indigo-500/30 hover:-translate-y-0.5"
-            style={{ background: "linear-gradient(160deg, rgba(255,255,255,0.03) 0%, rgba(255,255,255,0.012) 100%)" }}
-          >
-            {/* Step number watermark */}
-            <span
-              className="absolute top-4 right-5 font-display text-6xl font-black leading-none select-none pointer-events-none transition-opacity duration-300 group-hover:opacity-[0.04]"
-              style={{ color: "rgba(255,255,255,0.03)" }}
-            >
-              {i + 1}
-            </span>
-
-            <div
-              className="mb-5 flex h-11 w-11 items-center justify-center rounded-xl text-indigo-300"
-              style={{ background: "rgba(99,102,241,0.1)", border: "1px solid rgba(99,102,241,0.18)" }}
-            >
-              {step.icon}
-            </div>
-
-            <p className="mb-1 text-[10px] font-bold uppercase tracking-[0.18em] text-indigo-400/70">
-              Step {i + 1}
-            </p>
-            <h3 className="font-display text-base font-semibold text-white">{step.title}</h3>
-            <p className="mt-2 text-sm leading-relaxed text-slate-500">{step.body}</p>
-          </div>
-        ))}
-      </div>
-
-      {/* Bottom CTA hint */}
-      <p className="mt-10 text-center text-xs text-slate-600">
-        Powered by <span className="text-slate-500">Llama 3.3 70B</span> via Groq ·{" "}
-        <span className="text-slate-500">Anakin Wire API</span> · Free, no account needed
-      </p>
     </section>
   );
 }

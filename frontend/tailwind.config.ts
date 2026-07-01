@@ -9,30 +9,25 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ["var(--font-inter)", "system-ui", "sans-serif"],
+        sans:    ["var(--font-inter)", "system-ui", "sans-serif"],
         display: ["var(--font-sora)", "var(--font-inter)", "sans-serif"],
       },
       colors: {
-        radar: {
-          bg: "#07070b",
-          card: "#0c0c12",
-          border: "#1e1e2e",
-          accent: "#6366f1",
-          accent2: "#8b5cf6",
-          green: "#22c55e",
-          red: "#ef4444",
-          amber: "#f59e0b",
-          muted: "#6b7280",
+        brand: {
+          50:  "#eef2ff",
+          100: "#e0e7ff",
+          200: "#c7d2fe",
+          500: "#6366f1",
+          600: "#4f46e5",
+          700: "#4338ca",
+          900: "#312e81",
         },
       },
       boxShadow: {
-        glow: "0 0 0 1px rgba(99,102,241,0.25), 0 8px 40px -8px rgba(99,102,241,0.45)",
-        "glow-sm": "0 0 24px -6px rgba(99,102,241,0.4)",
-        card: "0 1px 0 0 rgba(255,255,255,0.04) inset, 0 20px 60px -20px rgba(0,0,0,0.7)",
-        lift: "0 24px 60px -24px rgba(0,0,0,0.8), 0 0 0 1px rgba(255,255,255,0.06)",
-      },
-      animation: {
-        pulse_slow: "pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite",
+        card:  "0 1px 0 rgba(15,23,42,0.04) inset, 0 8px 32px -4px rgba(15,23,42,0.1), 0 2px 8px -2px rgba(15,23,42,0.06)",
+        lift:  "0 12px 40px -8px rgba(15,23,42,0.14), 0 4px 12px -4px rgba(15,23,42,0.08)",
+        input: "0 1px 2px rgba(15,23,42,0.05)",
+        "btn-primary": "0 1px 3px rgba(79,70,229,0.3), 0 4px 12px -2px rgba(79,70,229,0.2)",
       },
     },
   },
