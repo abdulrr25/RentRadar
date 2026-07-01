@@ -145,12 +145,24 @@ async def synthesis_node(state: RentRadarState) -> RentRadarState:
         # Resolve max_rent early so budget filter and budget_note can both use it
         max_rent = state["query"].get("max_rent")
 
-        # Hard budget filter — always enforce regardless of LLM behaviour
+        # Hard budget filter — always enforce regardless of LLM behaviour.
+        # Coerce string rents (LLM occasionally returns "25000") to int first.
         if max_rent:
-            listings = [
-                l for l in listings
-                if isinstance(l.get("rent"), (int, float)) and l["rent"] <= max_rent
-            ]
+            def _rent_val(l: dict):
+                r = l.get("rent")
+                try:
+                    return int(r) if r is not None else None
+                except (ValueError, TypeError):
+                    return None
+
+            filtered = []
+            for l in listings:
+                rv = _rent_val(l)
+                if rv is not None:
+                    l["rent"] = rv          # normalise to int in-place
+                    if rv <= max_rent:
+                        filtered.append(l)
+            listings = filtered
 
         # Adaptive diversity guarantee: when more than one platform contributed,
         # cap each platform at 2 so no single source can dominate the results.

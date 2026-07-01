@@ -17,11 +17,14 @@ export async function POST(req: NextRequest) {
   const apiUrl = process.env.BACKEND_API_URL ?? "http://localhost:9000";
 
   try {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 55_000); // 55 s — under Vercel's 60 s limit
     const upstream = await fetch(`${apiUrl}/search`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
-    });
+      signal: controller.signal,
+    }).finally(() => clearTimeout(timeout));
 
     if (!upstream.body) {
       return new Response(

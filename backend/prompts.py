@@ -62,11 +62,15 @@ def _extract_price(text: str) -> str:
     Matches patterns like: ₹25,000/month  |  Rs 18000 per month  |  25000/mo
     Ignores sale prices (contains 'lakh', 'crore', or is > 2,00,000).
     """
+    # Skip text that mentions lakh/crore — definitely a sale price
+    if re.search(r'\b(?:lakh|crore|lac)\b', text, re.IGNORECASE):
+        return ""
+    # Prioritise explicit per-month patterns; avoid deposit/advance amounts
     patterns = [
-        r'(?:₹|rs\.?)\s*([\d,]+)\s*(?:/\s*(?:month|mo|mon|mnth))',
-        r'([\d,]+)\s*(?:/\s*(?:month|mo|mon|mnth))',
-        r'(?:rent|price)\D{0,10}(?:₹|rs\.?)\s*([\d,]+)',
-        r'(?:₹|rs\.?)\s*([\d,]+)',
+        r'(?:₹|rs\.?)\s*([\d,]+)\s*/\s*(?:month|mo|mon|mnth)',
+        r'([\d,]+)\s*/\s*(?:month|mo|mon|mnth)',
+        r'\brent\b\D{0,6}(?:₹|rs\.?)\s*([\d,]+)',
+        r'\bprice\b\D{0,6}(?:₹|rs\.?)\s*([\d,]+)',
     ]
     for pattern in patterns:
         m = re.search(pattern, text, re.IGNORECASE)
@@ -74,8 +78,8 @@ def _extract_price(text: str) -> str:
             raw = m.group(1).replace(",", "")
             try:
                 amount = int(raw)
-                # Ignore sale prices (anything above ₹2,00,000/mo is not rent)
-                if 1000 <= amount <= 200000:
+                # Valid monthly rent range for Bangalore: ₹5,000–₹2,00,000
+                if 5000 <= amount <= 200000:
                     return f"[PRICE: ₹{amount:,}]"
             except ValueError:
                 continue
