@@ -156,15 +156,22 @@ async def synthesis_node(state: RentRadarState) -> RentRadarState:
         max_rent = state["query"].get("max_rent")
 
         # Hard budget filter — always enforce regardless of LLM behaviour.
-        # Coerce string rents (LLM occasionally returns "25000") to int first.
+        # Rules:
+        #   known rent ≤ max  → keep (normalise to int)
+        #   known rent > max  → drop (over budget)
+        #   rent is null/unknown → KEEP (we cannot verify it's over budget;
+        #     dropping it silently causes "no listings found" when real
+        #     properties exist but their price wasn't in the snippet)
         if max_rent:
             filtered = []
             for l in listings:
                 rv = _to_int_rent(l.get("rent"))
-                if rv is not None:
-                    l["rent"] = rv      # normalise to int in-place
-                    if rv <= max_rent:
-                        filtered.append(l)
+                if rv is None:
+                    filtered.append(l)          # unknown price — keep
+                elif rv <= max_rent:
+                    l["rent"] = rv              # normalise to int
+                    filtered.append(l)
+                # else: confirmed over budget — drop
             listings = filtered
 
         # Adaptive diversity guarantee: when more than one platform contributed,

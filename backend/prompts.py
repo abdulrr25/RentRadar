@@ -45,7 +45,7 @@ DIVERSITY RULE (critical): Spread top_listings ACROSS the portals. If NoBroker, 
 
 REF RULE (critical): For every listing set "ref" to the exact [REF] tag shown next to the source page you took it from (e.g. "OLX2"). This is how the listing gets linked to the right page. Do not invent refs.
 
-PRICE RULE (critical): Each listing line below has a [PRICE: ₹X] tag pre-extracted by code from the raw snippet. Use that exact number as the "rent" value. Do NOT invent or infer a price if no [PRICE] tag is present — omit that listing instead.
+PRICE RULE (critical): If a [PRICE: ₹X] tag is present on a listing line, use that exact number as the "rent" value — never change it. If there is no [PRICE] tag, look carefully at the snippet text to extract the monthly rent yourself. If you genuinely cannot find a price anywhere in the snippet, set "rent": null — do NOT omit the listing. A listing with null rent is still useful; a listing silently dropped is not.
 
 BUDGET RULE (critical): NEVER include any listing with rent > user's max budget. Hard exclude them — do NOT show them even as alternatives. Sort remaining listings ascending by rent. If EVERY listing found is above budget, return an empty top_listings array and set "budget_note" explaining nothing was available at/under budget.
 

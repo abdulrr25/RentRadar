@@ -44,10 +44,19 @@ function CardContent({ l }: { l: Listing }) {
           </div>
           {/* Rent */}
           <div className="flex-shrink-0 text-right">
-            <p className="font-display text-xl font-bold text-emerald-400 leading-none">
-              ₹{l.rent.toLocaleString("en-IN")}
-            </p>
-            <p className="text-[11px] text-slate-500 mt-0.5">per month</p>
+            {l.rent != null ? (
+              <>
+                <p className="font-display text-xl font-bold text-emerald-400 leading-none">
+                  ₹{l.rent.toLocaleString("en-IN")}
+                </p>
+                <p className="text-[11px] text-slate-500 mt-0.5">per month</p>
+              </>
+            ) : (
+              <>
+                <p className="text-sm font-semibold text-slate-400">See listing</p>
+                <p className="text-[11px] text-slate-600 mt-0.5">for price</p>
+              </>
+            )}
           </div>
         </div>
 

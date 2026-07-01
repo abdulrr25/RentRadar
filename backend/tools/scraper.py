@@ -58,30 +58,27 @@ async def _search(prompt: str, source_name: str, limit: int = 6) -> dict:
 
 
 async def fetch_nobroker(locality: str, bhk: str, max_rent: int) -> dict:
-    """Search NoBroker individual property pages via Anakin web search."""
-    prompt = (
-        f'site:nobroker.in/property {bhk} rent {locality} Bangalore '
-        f'₹{max_rent} per month owner'
-    )
+    """Search NoBroker for real listings in this locality.
+
+    NOTE: We intentionally do NOT include the budget in the query.
+    Putting ₹{max_rent} in the search string means Anakin returns pages
+    that *mention* that number (could be deposit, comparison, unrelated text),
+    and _extract_price() then picks that number up as the rent — creating
+    artificially correct-looking but wrong prices.  Letting the search engine
+    return genuine property pages and reading the actual price from each
+    snippet gives far more reliable results.
+    """
+    prompt = f'{bhk} flat for rent in {locality} Bangalore site:nobroker.in'
     return await _search(prompt, "NoBroker")
 
 
 async def fetch_olx(locality: str, bhk: str, max_rent: int) -> dict:
-    """Search OLX individual ad pages.
-    OLX ad URLs contain /item/ — this steers results to individual ads
-    rather than category/search landing pages.
-    """
-    prompt = (
-        f'site:olx.in/item {bhk} for rent {locality} Bangalore '
-        f'₹{max_rent} month'
-    )
+    """Search OLX for rental ads in this locality."""
+    prompt = f'{bhk} for rent {locality} Bangalore site:olx.in'
     return await _search(prompt, "OLX")
 
 
 async def fetch_housing(locality: str, bhk: str, max_rent: int) -> dict:
-    """Search Housing.com individual property detail pages."""
-    prompt = (
-        f'site:housing.com {bhk} for rent {locality} Bangalore '
-        f'₹{max_rent} per month rent deposit'
-    )
+    """Search Housing.com for rental listings in this locality."""
+    prompt = f'{bhk} rental flat {locality} Bangalore site:housing.com'
     return await _search(prompt, "Housing.com")
