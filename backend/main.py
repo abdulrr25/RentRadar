@@ -1,19 +1,21 @@
 """
 RentRadar FastAPI server.
 
-POST /search  — accepts a natural language query, streams SSE events back.
-GET  /health  — liveness check; validates required env vars are present.
+POST /search    — accepts a natural language query, streams SSE events back.
+POST /feedback  — accepts a user feedback rating + optional comment.
+GET  /health    — liveness check; validates required env vars are present.
 """
 
 import json
 import asyncio
 import os
 import logging
+import time
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from pathlib import Path
 from dotenv import load_dotenv
 
@@ -118,3 +120,30 @@ async def health():
     if missing:
         return {"status": "degraded", "missing_env": missing}
     return {"status": "ok", "service": "RentRadar"}
+
+
+FEEDBACK_FILE = Path(__file__).parent / "feedback.jsonl"
+
+
+class FeedbackRequest(BaseModel):
+    rating: str = Field(pattern="^(up|down)$")
+    message: str = ""
+    query: str = ""
+
+
+@app.post("/feedback")
+async def feedback(request: FeedbackRequest):
+    """Append feedback as a JSON line. Best-effort — never blocks the UI on failure."""
+    entry = {
+        "ts": int(time.time()),
+        "rating": request.rating,
+        "message": request.message.strip()[:1000],
+        "query": request.query.strip()[:300],
+    }
+    try:
+        with open(FEEDBACK_FILE, "a", encoding="utf-8") as f:
+            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+    except Exception:
+        logger.exception("Failed to persist feedback")
+        return {"status": "error"}
+    return {"status": "ok"}

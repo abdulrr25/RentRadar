@@ -213,6 +213,12 @@ Open: `http://localhost:3000`
 
 ---
 
+## Feedback
+
+A floating feedback widget (bottom-right of every page) lets users send a 👍/👎 rating with an optional comment. Submissions go through `POST /api/feedback` (Next.js) → `POST /feedback` (FastAPI), which appends each entry as a JSON line to `backend/feedback.jsonl` — no database required. That file is git-ignored and lives on local/ephemeral disk, so on Render it resets on redeploy; treat it as a lightweight local log, not durable storage.
+
+---
+
 ## License
 
 MIT © [abdulrr25](https://github.com/abdulrr25)

@@ -5,6 +5,7 @@ import SearchBar from "./components/SearchBar";
 import SourceIndicators from "./components/SourceIndicators";
 import RentRadarCard from "./components/RentRadarCard";
 import HowItWorks from "./components/HowItWorks";
+import FeedbackWidget from "./components/FeedbackWidget";
 
 type SourceStatus = "idle" | "fetching" | "ok" | "error";
 const ALL_SOURCES = ["Reddit", "Google News", "Hacker News", "NoBroker", "OLX", "Housing.com"];
@@ -17,6 +18,7 @@ export default function Home() {
   const [error, setError]             = useState<string | null>(null);
   const [parsedQuery, setParsedQuery] = useState<Record<string, any> | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
+  const [lastQuery, setLastQuery]     = useState("");
   const abortRef                      = useRef<AbortController | null>(null);
 
   useEffect(() => { return () => { abortRef.current?.abort(); }; }, []);
@@ -24,7 +26,7 @@ export default function Home() {
   const handleSearch = useCallback(async (query: string) => {
     abortRef.current?.abort();
     abortRef.current = new AbortController();
-    setLoading(true); setHasSearched(true);
+    setLoading(true); setHasSearched(true); setLastQuery(query);
     setBrief(null); setError(null); setParsedQuery(null);
     setSources([]); setStatuses({});
 
@@ -232,6 +234,8 @@ export default function Home() {
           <p>Data refreshed live on every search · Not affiliated with any listing portal</p>
         </div>
       </footer>
+
+      <FeedbackWidget query={lastQuery} />
     </div>
   );
 }

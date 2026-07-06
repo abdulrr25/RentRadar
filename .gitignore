@@ -16,7 +16,9 @@ build/
 .env
 .env.local
 .env.production
-.env.example
+
+# User-submitted feedback — local data, not source
+backend/feedback.jsonl
 
 # Node
 node_modules/
@@ -26,6 +28,7 @@ next-env.d.ts
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+tsconfig.tsbuildinfo
 
 # Editor / tooling
 .claude/launch.json

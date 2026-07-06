@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
   const body = await req.json();
 
   // Server-only env var — set BACKEND_API_URL in .env.local (local) or Vercel dashboard (prod)
-  const apiUrl = process.env.BACKEND_API_URL ?? "http://localhost:9000";
+  const apiUrl = process.env.BACKEND_API_URL ?? "http://localhost:8000";
 
   try {
     const controller = new AbortController();
