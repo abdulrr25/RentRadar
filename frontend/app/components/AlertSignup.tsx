@@ -112,7 +112,7 @@ export default function AlertSignup({ locality, bhk, maxRent }: Props) {
     <div className="rounded-xl border border-brand-200 bg-brand-50 p-4 sm:p-5">
       <div className="flex items-start justify-between gap-3">
         <div>
-          <p className="text-sm font-semibold text-brand-900">Never miss a match like this</p>
+          <p className="text-sm font-semibold text-brand-900">Get notified about new matches</p>
           <p className="mt-0.5 text-xs text-brand-700">
             Get pinged the moment a new {bhk} appears in {locality} under ₹{maxRent.toLocaleString("en-IN")}.
           </p>

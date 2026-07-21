@@ -138,11 +138,18 @@ export default function RentRadarCard({ rawBrief, parsedQuery }: Props) {
             } />
             <ListingCards listings={brief.top_listings} />
           </div>
-          {parsedQuery?.locality && parsedQuery?.bhk && parsedQuery?.max_rent && (
-            <div className="px-5 sm:px-7 pb-6">
-              <AlertSignup locality={parsedQuery.locality} bhk={parsedQuery.bhk} maxRent={parsedQuery.max_rent} />
-            </div>
-          )}
+          <Divider />
+        </>
+      )}
+
+      {/* Alert signup — shown regardless of whether this search found an
+          in-budget listing, since "nothing matched yet" is exactly when a
+          user most wants to be notified the moment something does. */}
+      {parsedQuery?.locality && parsedQuery?.bhk && parsedQuery?.max_rent && (
+        <>
+          <div className="px-5 sm:px-7 py-6">
+            <AlertSignup locality={parsedQuery.locality} bhk={parsedQuery.bhk} maxRent={parsedQuery.max_rent} />
+          </div>
           <Divider />
         </>
       )}
