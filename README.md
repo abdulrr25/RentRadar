@@ -219,6 +219,29 @@ A floating feedback widget (bottom-right of every page) lets users send a 👍/�
 
 ---
 
+## Saved-search alerts
+
+After a search returns results, users can enter a phone number to get notified when a new matching listing appears — the "notify me when a 2BHK under ₹25k shows up in Bellandur" flow.
+
+**Status: fully built, WhatsApp sending is a stub.** There is no WhatsApp Business API account wired up yet (see [whatsapp.py](backend/whatsapp.py)) — every send just logs what would have gone out, so the rest of the pipeline can be exercised end-to-end today. Swapping in a real provider (e.g. AiSensy) later only requires rewriting the body of `send_whatsapp()`.
+
+**Storage:** SQLite (`backend/alerts.db`, git-ignored) via `aiosqlite` — `saved_searches` and `seen_listings` tables, initialised automatically on backend startup (see `db.py`). Deliberately not Postgres: zero infra to provision pre-launch. Move to a real Postgres pool if usage grows past a single instance.
+
+**Endpoints:**
+
+| Endpoint | Purpose |
+|----------|---------|
+| `POST /alerts` | Create a saved search (phone, locality, bhk, max_rent). Sends a WhatsApp confirmation request. |
+| `POST /alerts/webhook` | Inbound WhatsApp message handler — a "YES" reply confirms the most recent pending search for that phone. Point your BSP's webhook here once one exists. |
+| `DELETE /alerts/{id}` | Deactivate a saved search. |
+| `POST /internal/run-alerts` | Checks every active, confirmed saved search for new matches and fires alerts. Requires an `X-Internal-Secret` header matching `ALERTS_INTERNAL_SECRET` — returns 503 if that env var isn't set, so it can't run unprotected by accident. Meant to be called by a scheduler (e.g. a Render Cron Job hitting this every 30–60 min), not by the frontend. |
+
+The matching worker ([alert_worker.py](backend/alert_worker.py)) intentionally skips the LLM synthesis step used by `/search` — it calls the NoBroker/OLX/Housing.com scrapers directly and only alerts on listings with a parsed price at or under budget, keeping each run to Anakin search credits only (no Groq tokens spent on unattended background checks).
+
+**To go live:** set `AISENSY_API_KEY` (or your chosen BSP's key) once an account and approved WhatsApp templates exist, implement the real send call in `whatsapp.py`, set `ALERTS_INTERNAL_SECRET`, and wire a Render Cron Job to call `POST /internal/run-alerts`.
+
+---
+
 ## License
 
 MIT © [abdulrr25](https://github.com/abdulrr25)

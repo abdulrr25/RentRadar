@@ -3,6 +3,7 @@
 import { useMemo } from "react";
 import ListingCards from "./ListingCards";
 import LocalityScores from "./LocalityScores";
+import AlertSignup from "./AlertSignup";
 
 interface RentBrief {
   locality?: string;
@@ -22,7 +23,10 @@ interface RentBrief {
   verdict?: string;
 }
 
-interface Props { rawBrief: string; }
+interface Props {
+  rawBrief: string;
+  parsedQuery?: { locality?: string; bhk?: string; max_rent?: number } | null;
+}
 
 const TREND: Record<string, { color: string; bg: string; border: string; arrow: string }> = {
   rising:  { color: "text-red-600",     bg: "bg-red-50",     border: "border-red-200",     arrow: "↑" },
@@ -43,7 +47,7 @@ function Divider() {
   return <div className="border-t border-slate-200 mx-5 sm:mx-7" />;
 }
 
-export default function RentRadarCard({ rawBrief }: Props) {
+export default function RentRadarCard({ rawBrief, parsedQuery }: Props) {
   const brief: RentBrief | null = useMemo(() => {
     try {
       const s = rawBrief.replace(/^```json\s*/i, "").replace(/```\s*$/m, "").trim();
@@ -133,6 +137,11 @@ export default function RentRadarCard({ rawBrief }: Props) {
             } />
             <ListingCards listings={brief.top_listings} />
           </div>
+          {parsedQuery?.locality && parsedQuery?.bhk && parsedQuery?.max_rent && (
+            <div className="px-5 sm:px-7 pb-6">
+              <AlertSignup locality={parsedQuery.locality} bhk={parsedQuery.bhk} maxRent={parsedQuery.max_rent} />
+            </div>
+          )}
           <Divider />
         </>
       )}

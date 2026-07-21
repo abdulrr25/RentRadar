@@ -1,0 +1,83 @@
+"""
+Saved-search matching worker.
+
+Deliberately does NOT go through agent.py's LLM synthesis — alerts only need
+"is there a new listing under budget", not a narrative brief, so this calls
+the portal scrapers directly and skips the Groq call entirely. That keeps
+alert runs cheap (Anakin search credits only, no LLM tokens) since this is
+meant to run unattended on a schedule across every saved search.
+
+Triggered by POST /internal/run-alerts (see main.py), which is meant to be
+called by a scheduler (e.g. a Render Cron Job) once one is wired up —
+nothing here runs on its own timer.
+"""
+
+import asyncio
+import hashlib
+import logging
+
+import alerts_store
+from prompts import extract_price_int
+from tools.scraper import fetch_nobroker, fetch_olx, fetch_housing
+from whatsapp import send_whatsapp
+
+logger = logging.getLogger("rentradar.alerts")
+
+
+def _ref_hash(url: str) -> str:
+    return hashlib.sha1(url.encode("utf-8")).hexdigest()[:16]
+
+
+async def _find_matches(locality: str, bhk: str, max_rent: int) -> list[dict]:
+    """Fetch all three portals and return listings with a known price at/under budget."""
+    results = await asyncio.gather(
+        fetch_nobroker(locality, bhk, max_rent),
+        fetch_olx(locality, bhk, max_rent),
+        fetch_housing(locality, bhk, max_rent),
+        return_exceptions=True,
+    )
+
+    matches = []
+    for r in results:
+        if isinstance(r, Exception) or r.get("status") != "ok":
+            continue
+        for item in r.get("results", []):
+            price = extract_price_int(item.get("snippet", ""))
+            if price is not None and price <= max_rent and item.get("url"):
+                matches.append({
+                    "source": r["source"],
+                    "url": item["url"],
+                    "title": item.get("title", ""),
+                    "price": price,
+                })
+    return matches
+
+
+async def run_all_alerts() -> dict:
+    """Check every active, confirmed saved search for new matches. Returns a summary dict."""
+    searches = await alerts_store.list_active_confirmed()
+    sent = 0
+    checked = 0
+    errors = 0
+
+    for s in searches:
+        checked += 1
+        try:
+            matches = await _find_matches(s["locality"], s["bhk"], s["max_rent"])
+            for m in matches:
+                ref = _ref_hash(m["url"])
+                if await alerts_store.has_seen(s["id"], ref):
+                    continue
+                message = (
+                    f"RentRadar: New {s['bhk']} match in {s['locality']} — "
+                    f"₹{m['price']:,}/mo on {m['source']}. {m['url']}"
+                )
+                if await send_whatsapp(s["phone"], message):
+                    sent += 1
+                await alerts_store.mark_seen(s["id"], ref)
+            await alerts_store.mark_checked(s["id"])
+        except Exception:
+            errors += 1
+            logger.exception("Alert check failed for saved_search_id=%s", s["id"])
+
+    return {"checked": checked, "alerts_sent": sent, "errors": errors}

@@ -54,17 +54,16 @@ SCORES RULE: locality_scores are estimates derived from community sentiment (Red
 Other rules: ignore sale prices like ₹25,00,000 / "Crores" (those are not monthly rent), omit fields with no evidence, skip unavailable sources silently."""
 
 
-def _extract_price(text: str) -> str:
+def extract_price_int(text: str) -> "int | None":
     """
-    Extract the first monthly rent figure from a snippet and return a [PRICE: ₹X]
-    annotation, or empty string if none found.
+    Extract the first monthly rent figure from a snippet as a plain int, or None.
 
     Matches patterns like: ₹25,000/month  |  Rs 18000 per month  |  25000/mo
     Ignores sale prices (contains 'lakh', 'crore', or is > 2,00,000).
     """
     # Skip text that mentions lakh/crore — definitely a sale price
     if re.search(r'\b(?:lakh|crore|lac)\b', text, re.IGNORECASE):
-        return ""
+        return None
     # Prioritise explicit per-month patterns; avoid deposit/advance amounts
     patterns = [
         r'(?:₹|rs\.?)\s*([\d,]+)\s*/\s*(?:month|mo|mon|mnth)',
@@ -80,10 +79,16 @@ def _extract_price(text: str) -> str:
                 amount = int(raw)
                 # Valid monthly rent range for Bangalore: ₹5,000–₹2,00,000
                 if 3000 <= amount <= 200000:
-                    return f"[PRICE: ₹{amount:,}]"
+                    return amount
             except ValueError:
                 continue
-    return ""
+    return None
+
+
+def _extract_price(text: str) -> str:
+    """Extract the first monthly rent figure and return a [PRICE: ₹X] annotation, or "" if none found."""
+    amount = extract_price_int(text)
+    return f"[PRICE: ₹{amount:,}]" if amount is not None else ""
 
 
 def _trim(data, limit: int) -> str:

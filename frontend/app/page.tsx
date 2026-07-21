@@ -205,7 +205,7 @@ export default function Home() {
 
         {/* ── Results ───────────────────────────────────────────────────── */}
         <section className="mx-auto max-w-2xl px-4 sm:px-6 pb-24">
-          {brief && <RentRadarCard rawBrief={brief} />}
+          {brief && <RentRadarCard rawBrief={brief} parsedQuery={parsedQuery} />}
           {loading && !brief && (
             <div className="mt-6 space-y-3">
               {[...Array(3)].map((_, i) => (

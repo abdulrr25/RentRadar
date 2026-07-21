@@ -20,6 +20,11 @@ build/
 # User-submitted feedback — local data, not source
 backend/feedback.jsonl
 
+# Saved-search alerts DB — local data, not source
+backend/alerts.db
+backend/alerts.db-wal
+backend/alerts.db-shm
+
 # Node
 node_modules/
 .next/
