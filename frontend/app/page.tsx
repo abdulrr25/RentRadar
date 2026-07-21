@@ -78,8 +78,11 @@ export default function Home() {
   return (
     <div className="relative min-h-screen flex flex-col">
 
+      {/* ── Ambient background ───────────────────────────────────────────── */}
+      <div className="aurora"><span className="blob-3" /></div>
+
       {/* ── Navigation ───────────────────────────────────────────────────── */}
-      <header className="sticky top-0 z-30 bg-white border-b border-slate-200" style={{ boxShadow: "0 1px 4px rgba(15,23,42,0.06)" }}>
+      <header className="glass sticky top-0 z-30 border-b border-white/40" style={{ boxShadow: "0 1px 4px rgba(15,23,42,0.06)" }}>
         <div className="mx-auto max-w-6xl px-4 sm:px-6 h-14 sm:h-16 flex items-center justify-between">
 
           <a href="/" className="flex items-center gap-2.5">
@@ -123,29 +126,26 @@ export default function Home() {
 
         {/* ── Hero ──────────────────────────────────────────────────────── */}
         <section className="relative overflow-hidden">
-          {/* Subtle indigo gradient at top */}
-          <div className="absolute inset-x-0 top-0 h-64 pointer-events-none" style={{ background: "linear-gradient(180deg, rgba(238,242,255,0.8) 0%, transparent 100%)" }} />
+          <div className="relative mx-auto max-w-3xl px-4 sm:px-6 pt-14 sm:pt-24 md:pt-28 pb-12 text-center">
 
-          <div className="relative mx-auto max-w-3xl px-4 sm:px-6 pt-12 sm:pt-20 md:pt-24 pb-12 text-center">
-
-            <div className="rise badge">
+            <div className="rise glass inline-flex items-center gap-2 rounded-full px-4 py-1.5 text-[11px] font-semibold uppercase tracking-wider text-brand-700" style={{ boxShadow: "0 4px 16px -4px rgba(79,70,229,0.15)" }}>
               <span className="h-1.5 w-1.5 rounded-full bg-brand-500 animate-pulse" />
               AI-Powered Rental Intelligence · Bangalore
             </div>
 
-            <h1 className="rise delay-1 mt-6 font-display font-extrabold leading-[1.08] tracking-tight text-slate-900 text-4xl sm:text-5xl md:text-[3.5rem]">
+            <h1 className="rise delay-1 mt-7 font-display font-extrabold leading-[1.05] tracking-tight text-slate-900 text-5xl sm:text-6xl md:text-7xl">
               Find your flat.
               <br />
               <span className="gradient-text">Let AI do the work.</span>
             </h1>
 
-            <p className="rise delay-2 mx-auto mt-5 max-w-lg text-[15px] sm:text-base leading-relaxed text-slate-500">
+            <p className="rise delay-2 mx-auto mt-6 max-w-lg text-base sm:text-lg leading-relaxed text-slate-600">
               Ask in plain English. RentRadar scans{" "}
-              <span className="font-medium text-slate-700">NoBroker, OLX, Housing.com, Reddit and news</span>{" "}
+              <span className="font-medium text-slate-800">NoBroker, OLX, Housing.com, Reddit and news</span>{" "}
               in parallel — then returns ranked listings, locality scores, price trends and scam alerts.
             </p>
 
-            <div className="rise delay-3 mt-9">
+            <div className="rise delay-3 glow-ring mt-10 rounded-2xl">
               <SearchBar onSearch={handleSearch} loading={loading} />
             </div>
 
@@ -223,7 +223,7 @@ export default function Home() {
       </main>
 
       {/* ── Footer ────────────────────────────────────────────────────────── */}
-      <footer className="border-t border-slate-200 bg-white">
+      <footer className="glass border-t border-white/40">
         <div className="mx-auto max-w-6xl px-4 sm:px-6 py-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-xs text-slate-500">
           <div className="flex items-center gap-2.5">
             <span className="font-display text-sm font-bold text-slate-700">

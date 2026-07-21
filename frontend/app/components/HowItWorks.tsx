@@ -70,15 +70,20 @@ export default function HowItWorks() {
           {STEPS.map((step, i) => (
             <div
               key={step.title}
-              className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 transition-all duration-200 hover:border-brand-200 hover:shadow-lift"
+              className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 transition-all duration-300 hover:-translate-y-1 hover:border-transparent"
               style={{ boxShadow: "0 1px 3px rgba(15,23,42,0.06)" }}
+              onMouseEnter={(e) => (e.currentTarget.style.boxShadow = "0 20px 48px -12px rgba(79,70,229,0.28), 0 4px 12px -2px rgba(79,70,229,0.12)")}
+              onMouseLeave={(e) => (e.currentTarget.style.boxShadow = "0 1px 3px rgba(15,23,42,0.06)")}
             >
               {/* Watermark step number */}
               <span className="absolute top-3 right-4 font-display text-7xl font-black text-slate-50 select-none pointer-events-none leading-none">
                 {i + 1}
               </span>
 
-              <div className="relative mb-5 flex h-11 w-11 items-center justify-center rounded-xl bg-brand-50 border border-brand-100 text-brand-600">
+              <div
+                className="relative mb-5 flex h-12 w-12 items-center justify-center rounded-xl text-white"
+                style={{ background: "linear-gradient(135deg, #6366f1 0%, #a855f7 100%)", boxShadow: "0 8px 20px -6px rgba(99,102,241,0.5)" }}
+              >
                 {step.icon}
               </div>
 

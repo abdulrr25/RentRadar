@@ -40,11 +40,69 @@ body::before {
   position: fixed;
   inset: 0;
   z-index: -1;
-  background-image: radial-gradient(circle, rgba(15,23,42,0.04) 1px, transparent 1px);
+  background-image: radial-gradient(circle, rgba(15,23,42,0.045) 1px, transparent 1px);
   background-size: 28px 28px;
   mask-image: radial-gradient(ellipse 90% 60% at 50% 0%, #000 10%, transparent 65%);
   -webkit-mask-image: radial-gradient(ellipse 90% 60% at 50% 0%, #000 10%, transparent 65%);
   pointer-events: none;
+}
+
+/* Aurora — layered, softly drifting gradient blobs behind the hero. This is
+   the single biggest lever for "feels like a modern AI product" vs. a flat
+   template background; the dot grid above rides on top of it. */
+.aurora {
+  position: fixed;
+  inset: 0;
+  z-index: -2;
+  overflow: hidden;
+  pointer-events: none;
+}
+.aurora::before,
+.aurora::after,
+.aurora .blob-3 {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.55;
+  will-change: transform;
+}
+.aurora::before {
+  width: 620px; height: 620px;
+  top: -220px; left: -160px;
+  background: radial-gradient(circle, #818cf8 0%, transparent 70%);
+  animation: aurora-drift-1 22s ease-in-out infinite alternate;
+}
+.aurora::after {
+  width: 560px; height: 560px;
+  top: -160px; right: -180px;
+  background: radial-gradient(circle, #c084fc 0%, transparent 70%);
+  animation: aurora-drift-2 26s ease-in-out infinite alternate;
+}
+.aurora .blob-3 {
+  width: 480px; height: 480px;
+  top: 120px; left: 38%;
+  background: radial-gradient(circle, #67e8f9 0%, transparent 70%);
+  opacity: 0.35;
+  animation: aurora-drift-3 30s ease-in-out infinite alternate;
+}
+@keyframes aurora-drift-1 {
+  from { transform: translate(0, 0) scale(1); }
+  to   { transform: translate(60px, 40px) scale(1.08); }
+}
+@keyframes aurora-drift-2 {
+  from { transform: translate(0, 0) scale(1); }
+  to   { transform: translate(-50px, 30px) scale(1.05); }
+}
+@keyframes aurora-drift-3 {
+  from { transform: translate(-30px, 0) scale(1); }
+  to   { transform: translate(30px, -20px) scale(1.1); }
+}
+@media (max-width: 640px) {
+  .aurora::before, .aurora::after, .aurora .blob-3 { filter: blur(60px); opacity: 0.4; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .aurora::before, .aurora::after, .aurora .blob-3 { animation: none; }
 }
 
 /* ── Scrollbar ───────────────────────────────────────────────────────────── */
@@ -70,6 +128,54 @@ body::before {
   box-shadow: 0 12px 40px -8px rgba(15,23,42,0.14), 0 4px 12px -4px rgba(15,23,42,0.08);
   border-color: #c7d2fe;
   transform: translateY(-1px);
+}
+
+/* Glassmorphism — frosted, semi-transparent surface for elements sitting on
+   the aurora background (the search bar shell, the hero badge). */
+.glass {
+  background: rgba(255,255,255,0.72);
+  backdrop-filter: blur(20px) saturate(160%);
+  -webkit-backdrop-filter: blur(20px) saturate(160%);
+  border: 1px solid rgba(255,255,255,0.6);
+}
+
+/* Soft ambient glow behind an element — used behind the search bar and
+   primary CTAs so they read as the visual focal point, not just a box. */
+.glow-ring {
+  position: relative;
+}
+.glow-ring::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  z-index: -1;
+  border-radius: inherit;
+  background: linear-gradient(135deg, #818cf8, #c084fc, #67e8f9);
+  filter: blur(18px);
+  opacity: 0.45;
+  transition: opacity 0.3s ease;
+}
+.glow-ring:focus-within::before,
+.glow-ring:hover::before {
+  opacity: 0.65;
+}
+
+/* Gradient-ring border — a hairline gradient outline instead of a flat grey
+   border, used on the primary result card so it reads as "the" object on
+   the page rather than one box among many. */
+.ring-gradient {
+  position: relative;
+  border: 1px solid transparent;
+  background-clip: padding-box;
+}
+.ring-gradient::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  margin: -1px;
+  border-radius: inherit;
+  background: linear-gradient(135deg, rgba(129,140,248,0.7), rgba(192,132,252,0.5), rgba(103,232,249,0.4));
 }
 
 /* ── Typography helpers ──────────────────────────────────────────────────── */

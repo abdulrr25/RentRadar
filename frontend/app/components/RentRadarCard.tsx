@@ -84,10 +84,11 @@ export default function RentRadarCard({ rawBrief, parsedQuery }: Props) {
   const trend = TREND[tKey] ?? TREND.stable;
 
   return (
-    <div className="card-enter card mt-8 w-full overflow-hidden rounded-3xl">
+    <div className="card-enter ring-gradient card mt-8 w-full overflow-hidden rounded-3xl" style={{ boxShadow: "0 24px 64px -12px rgba(79,70,229,0.22), 0 8px 24px -4px rgba(15,23,42,0.1)" }}>
 
       {/* Header */}
-      <div className="px-5 sm:px-7 py-7" style={{ background: "linear-gradient(135deg, #312e81 0%, #4338ca 60%, #4f46e5 100%)" }}>
+      <div className="relative px-5 sm:px-7 py-8 overflow-hidden" style={{ background: "linear-gradient(135deg, #312e81 0%, #4338ca 55%, #6d28d9 100%)" }}>
+        <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full opacity-30" style={{ background: "radial-gradient(circle, #a78bfa 0%, transparent 70%)", filter: "blur(30px)" }} />
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0">
             <p className="mb-1.5 flex items-center gap-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-indigo-200">
