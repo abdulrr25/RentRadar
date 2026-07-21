@@ -25,9 +25,12 @@ async def confirm_latest_for_phone(phone: str) -> str | None:
     """Confirm the most recently created unconfirmed, active search for this phone. Returns its id, or None."""
     conn = get_conn()
     cursor = await conn.execute(
+        # created_at has second-level resolution, so two searches created in
+        # the same second tie on it — break ties with rowid (SQLite's implicit
+        # insertion-order column) so "most recent" is always deterministic.
         """SELECT id FROM saved_searches
            WHERE phone = ? AND confirmed = 0 AND active = 1
-           ORDER BY created_at DESC LIMIT 1""",
+           ORDER BY created_at DESC, rowid DESC LIMIT 1""",
         (phone,),
     )
     row = await cursor.fetchone()

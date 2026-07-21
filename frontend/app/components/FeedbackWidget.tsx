@@ -95,6 +95,7 @@ export default function FeedbackWidget({ query }: Props) {
                 value={message}
                 onChange={(e) => setMessage(e.target.value)}
                 placeholder="Anything specific? (optional)"
+                aria-label="Additional feedback (optional)"
                 rows={3}
                 maxLength={1000}
                 className="mt-3 w-full resize-none rounded-xl border border-slate-200 bg-slate-50 p-2.5 text-sm text-slate-800 placeholder-slate-400 focus:border-brand-400 focus:bg-white focus:outline-none focus:ring-4 focus:ring-brand-50"

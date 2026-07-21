@@ -108,6 +108,20 @@ RentRadar/
 
 ---
 
+## Testing & CI
+
+Backend has a pytest suite (46 tests) covering the query parser, price extraction/context building, the saved-search alerts store, and every API endpoint (validation, rate limits, the webhook/internal-endpoint secret guards, a stubbed-agent happy path for `/search`):
+
+```bash
+cd backend
+pip install -r requirements-dev.txt
+pytest -v
+```
+
+Tests run against an isolated in-memory SQLite DB per test and a reset rate limiter, so run order never matters. [GitHub Actions](.github/workflows/ci.yml) runs this suite plus a frontend typecheck + production build on every push and PR to `master`.
+
+---
+
 ## Local Setup
 
 ### Prerequisites

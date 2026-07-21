@@ -41,6 +41,7 @@ export default function SearchBar({ onSearch, loading }: Props) {
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={handleKey}
           placeholder="e.g. 2BHK near Bellandur under ₹25,000"
+          aria-label="Search for a rental, e.g. 2BHK near Bellandur under ₹25,000"
           disabled={loading}
           className="flex-1 bg-transparent px-2 py-3.5 text-base text-slate-900 placeholder-slate-400 focus:outline-none disabled:opacity-60"
         />

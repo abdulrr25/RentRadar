@@ -75,6 +75,7 @@ export default function AlertSignup({ locality, bhk, maxRent }: Props) {
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
               placeholder="+91 98765 43210"
+              aria-label="Phone number for WhatsApp alerts"
               className="min-w-0 flex-1 rounded-lg border border-brand-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:border-brand-400 focus:outline-none focus:ring-4 focus:ring-brand-100"
             />
             <button

@@ -15,7 +15,10 @@ const sora = Sora({
   display: "swap",
 });
 
+const SITE_URL = process.env.NEXT_PUBLIC_SITE_URL ?? "https://rentradar.vercel.app";
+
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: "RentRadar — AI Rental Intelligence for Bangalore",
   description:
     "Find your Bangalore flat instantly. RentRadar scans NoBroker, OLX, Housing.com, Reddit and news in real time to surface ranked listings, locality scores, price trends and scam alerts.",
@@ -24,6 +27,7 @@ export const metadata: Metadata = {
     title: "RentRadar — AI Rental Intelligence for Bangalore",
     description: "Find your Bangalore flat. Instantly.",
     type: "website",
+    url: SITE_URL,
   },
 };
 
