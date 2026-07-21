@@ -231,7 +231,12 @@ export default function Home() {
             </span>
             <span>· Built for Bangalore tenants</span>
           </div>
-          <p>Data refreshed live on every search · Not affiliated with any listing portal</p>
+          <div className="flex items-center gap-4">
+            <p>Data refreshed live on every search · Not affiliated with any listing portal</p>
+            <a href="/terms" className="font-medium text-slate-500 underline-offset-2 hover:text-slate-700 hover:underline">
+              Terms &amp; Conditions
+            </a>
+          </div>
         </div>
       </footer>
 
