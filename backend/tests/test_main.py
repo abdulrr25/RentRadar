@@ -83,70 +83,182 @@ def test_search_happy_path_streams_expected_events(client, monkeypatch):
     assert events[0]["data"]["locality"] == "Bellandur"
 
 
-# ── /alerts ──────────────────────────────────────────────────────────────────
+# ── /alerts — webpush (immediate confirmation) ──────────────────────────────
 
-def test_create_alert_rejects_invalid_phone(client):
-    res = client.post("/alerts", json={"phone": "abc", "locality": "Bellandur", "bhk": "2BHK", "max_rent": 25000})
+def _valid_subscription():
+    return json.dumps({"endpoint": "https://fcm.googleapis.com/x", "keys": {"p256dh": "a", "auth": "b"}})
+
+
+def test_create_webpush_alert_confirms_immediately(client):
+    res = client.post("/alerts", json={
+        "channel": "webpush", "target": _valid_subscription(),
+        "locality": "Bellandur", "bhk": "2BHK", "max_rent": 25000,
+    })
+    assert res.status_code == 200
+    assert res.json()["status"] == "confirmed"
+    assert res.json()["id"]
+
+
+def test_webpush_alert_rejects_missing_target(client):
+    res = client.post("/alerts", json={
+        "channel": "webpush", "locality": "Bellandur", "bhk": "2BHK", "max_rent": 25000,
+    })
     assert res.status_code == 422
 
 
-def test_create_alert_success(client):
-    res = client.post("/alerts", json={"phone": "+919876543210", "locality": "Bellandur", "bhk": "2BHK", "max_rent": 25000})
+def test_webpush_alert_rejects_malformed_subscription(client):
+    res = client.post("/alerts", json={
+        "channel": "webpush", "target": "not json",
+        "locality": "Bellandur", "bhk": "2BHK", "max_rent": 25000,
+    })
+    assert res.status_code == 422
+
+
+def test_webpush_alert_rejects_subscription_missing_keys_field(client):
+    res = client.post("/alerts", json={
+        "channel": "webpush", "target": json.dumps({"endpoint": "https://x"}),
+        "locality": "Bellandur", "bhk": "2BHK", "max_rent": 25000,
+    })
+    assert res.status_code == 422
+
+
+# ── /alerts — email (token-link confirmation) ───────────────────────────────
+
+def test_create_email_alert_pending_until_confirmed(client):
+    res = client.post("/alerts", json={
+        "channel": "email", "target": "user@example.com",
+        "locality": "Bellandur", "bhk": "2BHK", "max_rent": 25000,
+    })
     assert res.status_code == 200
-    body = res.json()
-    assert body["status"] == "pending_confirmation"
-    assert body["id"]
+    assert res.json()["status"] == "pending_confirmation"
 
 
-def test_create_alert_rate_limited_after_five(client):
-    for i in range(5):
-        res = client.post("/alerts", json={"phone": f"+9198765432{i}0", "locality": "Bellandur", "bhk": "2BHK", "max_rent": 25000})
-        assert res.status_code == 200
-    res = client.post("/alerts", json={"phone": "+919876543299", "locality": "Bellandur", "bhk": "2BHK", "max_rent": 25000})
-    assert res.status_code == 429
+def test_email_alert_rejects_invalid_address(client):
+    res = client.post("/alerts", json={
+        "channel": "email", "target": "not-an-email",
+        "locality": "Bellandur", "bhk": "2BHK", "max_rent": 25000,
+    })
+    assert res.status_code == 422
 
 
-# ── /alerts/webhook ──────────────────────────────────────────────────────────
+def test_email_confirm_link_activates_alert(client, monkeypatch):
+    # The API deliberately never returns the confirm token (it only ever goes
+    # out via the actual email) — pin the generator so the test can predict it.
+    monkeypatch.setattr(main.secrets, "token_urlsafe", lambda n: "fixed-test-token")
 
-def test_webhook_disabled_without_secret_configured(client, monkeypatch):
-    monkeypatch.delenv("ALERTS_WEBHOOK_SECRET", raising=False)
-    res = client.post("/alerts/webhook", json={"phone": "+919876543210", "message": "YES"})
+    create_res = client.post("/alerts", json={
+        "channel": "email", "target": "user@example.com",
+        "locality": "Bellandur", "bhk": "2BHK", "max_rent": 25000,
+    })
+    search_id = create_res.json()["id"]
+
+    res = client.get("/alerts/confirm/fixed-test-token")
+    assert res.status_code == 200
+    assert "all set" in res.text.lower()
+
+    # Confirming twice must not re-activate / double count
+    res2 = client.get("/alerts/confirm/fixed-test-token")
+    assert "invalid" in res2.text.lower()
+
+
+def test_email_confirm_endpoint_rejects_bad_token(client):
+    res = client.get("/alerts/confirm/not-a-real-token")
+    assert res.status_code == 200  # always renders a page, success or not
+    assert "invalid" in res.text.lower()
+
+
+# ── /alerts — telegram (deep-link + webhook confirmation) ───────────────────
+
+def test_create_telegram_alert_without_bot_configured_returns_503(client, monkeypatch):
+    monkeypatch.delenv("TELEGRAM_BOT_USERNAME", raising=False)
+    res = client.post("/alerts", json={
+        "channel": "telegram", "locality": "Bellandur", "bhk": "2BHK", "max_rent": 25000,
+    })
     assert res.status_code == 503
 
 
-def test_webhook_rejects_wrong_secret(client, monkeypatch):
-    monkeypatch.setenv("ALERTS_WEBHOOK_SECRET", "correct-secret")
+def test_create_telegram_alert_returns_deep_link_when_configured(client, monkeypatch):
+    monkeypatch.setenv("TELEGRAM_BOT_USERNAME", "RentRadarBot")
+    res = client.post("/alerts", json={
+        "channel": "telegram", "locality": "Bellandur", "bhk": "2BHK", "max_rent": 25000,
+    })
+    assert res.status_code == 200
+    body = res.json()
+    assert body["status"] == "pending_confirmation"
+    assert body["telegram_link"].startswith("https://t.me/RentRadarBot?start=")
+
+
+def test_telegram_webhook_disabled_without_secret(client, monkeypatch):
+    monkeypatch.delenv("TELEGRAM_WEBHOOK_SECRET", raising=False)
+    res = client.post("/alerts/telegram/webhook", json={"message": {"text": "/start abc", "chat": {"id": 1}}})
+    assert res.status_code == 503
+
+
+def test_telegram_webhook_rejects_wrong_secret(client, monkeypatch):
+    monkeypatch.setenv("TELEGRAM_WEBHOOK_SECRET", "correct-secret")
     res = client.post(
-        "/alerts/webhook",
-        json={"phone": "+919876543210", "message": "YES"},
-        headers={"X-Webhook-Secret": "wrong-secret"},
+        "/alerts/telegram/webhook",
+        json={"message": {"text": "/start abc", "chat": {"id": 1}}},
+        headers={"X-Telegram-Bot-Api-Secret-Token": "wrong"},
     )
     assert res.status_code == 403
 
 
-def test_webhook_confirms_pending_search_on_yes(client, monkeypatch):
-    monkeypatch.setenv("ALERTS_WEBHOOK_SECRET", "correct-secret")
-    create_res = client.post("/alerts", json={"phone": "+919876543210", "locality": "Bellandur", "bhk": "2BHK", "max_rent": 25000})
-    search_id = create_res.json()["id"]
+def test_telegram_webhook_confirms_pending_search(client, monkeypatch):
+    monkeypatch.setenv("TELEGRAM_BOT_USERNAME", "RentRadarBot")
+    monkeypatch.setenv("TELEGRAM_WEBHOOK_SECRET", "correct-secret")
+
+    create_res = client.post("/alerts", json={
+        "channel": "telegram", "locality": "Bellandur", "bhk": "2BHK", "max_rent": 25000,
+    })
+    telegram_link = create_res.json()["telegram_link"]
+    token = telegram_link.split("start=")[1]
 
     res = client.post(
-        "/alerts/webhook",
-        json={"phone": "+919876543210", "message": "yes"},
-        headers={"X-Webhook-Secret": "correct-secret"},
+        "/alerts/telegram/webhook",
+        json={"message": {"text": f"/start {token}", "chat": {"id": 999888}}},
+        headers={"X-Telegram-Bot-Api-Secret-Token": "correct-secret"},
     )
     assert res.status_code == 200
-    assert res.json() == {"status": "confirmed", "id": search_id}
+    assert res.json() == {"status": "confirmed", "id": create_res.json()["id"]}
 
 
-def test_webhook_ignores_non_yes_messages(client, monkeypatch):
-    monkeypatch.setenv("ALERTS_WEBHOOK_SECRET", "correct-secret")
+def test_telegram_webhook_ignores_non_start_messages(client, monkeypatch):
+    monkeypatch.setenv("TELEGRAM_WEBHOOK_SECRET", "correct-secret")
     res = client.post(
-        "/alerts/webhook",
-        json={"phone": "+919876543210", "message": "hi"},
-        headers={"X-Webhook-Secret": "correct-secret"},
+        "/alerts/telegram/webhook",
+        json={"message": {"text": "hi there", "chat": {"id": 1}}},
+        headers={"X-Telegram-Bot-Api-Secret-Token": "correct-secret"},
     )
     assert res.status_code == 200
     assert res.json() == {"status": "ignored"}
+
+
+def test_telegram_webhook_handles_missing_message_gracefully(client, monkeypatch):
+    monkeypatch.setenv("TELEGRAM_WEBHOOK_SECRET", "correct-secret")
+    res = client.post(
+        "/alerts/telegram/webhook",
+        json={},
+        headers={"X-Telegram-Bot-Api-Secret-Token": "correct-secret"},
+    )
+    assert res.status_code == 200
+    assert res.json() == {"status": "ignored"}
+
+
+# ── rate limiting ────────────────────────────────────────────────────────────
+
+def test_create_alert_rate_limited_after_five(client):
+    for _ in range(5):
+        res = client.post("/alerts", json={
+            "channel": "webpush", "target": _valid_subscription(),
+            "locality": "Bellandur", "bhk": "2BHK", "max_rent": 25000,
+        })
+        assert res.status_code == 200
+    res = client.post("/alerts", json={
+        "channel": "webpush", "target": _valid_subscription(),
+        "locality": "Bellandur", "bhk": "2BHK", "max_rent": 25000,
+    })
+    assert res.status_code == 429
 
 
 # ── DELETE /alerts/{id} ──────────────────────────────────────────────────────
@@ -157,7 +269,10 @@ def test_delete_nonexistent_alert_returns_404(client):
 
 
 def test_delete_existing_alert(client):
-    create_res = client.post("/alerts", json={"phone": "+919876543210", "locality": "Bellandur", "bhk": "2BHK", "max_rent": 25000})
+    create_res = client.post("/alerts", json={
+        "channel": "webpush", "target": _valid_subscription(),
+        "locality": "Bellandur", "bhk": "2BHK", "max_rent": 25000,
+    })
     search_id = create_res.json()["id"]
     res = client.delete(f"/alerts/{search_id}")
     assert res.status_code == 200

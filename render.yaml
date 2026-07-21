@@ -16,9 +16,22 @@ services:
       # until a persistent disk or external DB is attached.
       - key: ALERTS_INTERNAL_SECRET
         sync: false
-      # Optional — enables POST /alerts/webhook (inbound WhatsApp confirmation).
-      # Leave unset to keep it disabled. Placeholder until real BSP signature
-      # verification replaces it — see main.py.
-      - key: ALERTS_WEBHOOK_SECRET
+      # Optional — saved-search alert channels. Each is independently stubbed
+      # (logged, not sent) until its own env vars are set — see backend/channels/.
+      - key: TELEGRAM_BOT_TOKEN
+        sync: false
+      - key: TELEGRAM_BOT_USERNAME
+        sync: false
+      - key: TELEGRAM_WEBHOOK_SECRET
+        sync: false
+      - key: VAPID_PRIVATE_KEY
+        sync: false
+      - key: VAPID_PUBLIC_KEY
+        sync: false
+      - key: VAPID_SUBJECT
+        sync: false
+      - key: RESEND_API_KEY
+        sync: false
+      - key: RESEND_FROM_EMAIL
         sync: false
     healthCheckPath: /health

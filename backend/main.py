@@ -1,13 +1,15 @@
 """
 RentRadar FastAPI server.
 
-POST /search              — accepts a natural language query, streams SSE events back.
-POST /feedback             — accepts a user feedback rating + optional comment.
-POST /alerts                — create a saved search (unconfirmed until WhatsApp reply).
-POST /alerts/webhook        — inbound WhatsApp message webhook; "YES" confirms a saved search.
-DELETE /alerts/{id}         — deactivate a saved search.
-POST /internal/run-alerts   — check all saved searches for new matches (scheduler-triggered).
-GET  /health                — liveness check; validates required env vars are present.
+POST /search                  — accepts a natural language query, streams SSE events back.
+POST /feedback                 — accepts a user feedback rating + optional comment.
+POST /alerts                   — create a saved search on one of three channels
+                                  (telegram / webpush / email); each has its own opt-in flow.
+POST /alerts/telegram/webhook   — inbound Telegram update; a "/start <token>" confirms.
+GET  /alerts/confirm/{token}    — email confirmation link target.
+DELETE /alerts/{id}             — deactivate a saved search.
+POST /internal/run-alerts       — check all saved searches for new matches (scheduler-triggered).
+GET  /health                    — liveness check; validates required env vars are present.
 """
 
 import json
@@ -15,13 +17,15 @@ import asyncio
 import os
 import logging
 import re
+import secrets
 import time
 from contextlib import asynccontextmanager
+from typing import Literal
 
 from fastapi import FastAPI, Header, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, Field
+from fastapi.responses import HTMLResponse, StreamingResponse
+from pydantic import BaseModel, Field, model_validator
 from pathlib import Path
 from dotenv import load_dotenv
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -37,7 +41,9 @@ from agent import agent
 import db
 import alerts_store
 from alert_worker import run_all_alerts
-from whatsapp import send_whatsapp
+from channels.telegram import send_telegram, bot_start_link
+from channels.webpush import send_webpush
+from channels.email import send_email
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(name)s:%(message)s")
 logger = logging.getLogger("rentradar")
@@ -79,7 +85,7 @@ app.add_middleware(
     allow_origin_regex=r"https://rentradar(-[a-z0-9-]+)?\.vercel\.app",
     allow_credentials=True,
     allow_methods=["GET", "POST", "DELETE"],
-    allow_headers=["Content-Type", "X-Internal-Secret", "X-Webhook-Secret"],
+    allow_headers=["Content-Type"],
 )
 
 
@@ -193,70 +199,139 @@ async def feedback(request: Request, body: FeedbackRequest):
 
 # ── Saved-search alerts ──────────────────────────────────────────────────────
 #
-# WhatsApp sending is currently a stub (see whatsapp.py) — no BSP account
-# exists yet. Everything below is fully functional and testable end-to-end;
-# only the actual outbound WhatsApp call is a no-op logger until an AiSensy
-# (or similar) integration is wired in.
+# Three channels, none needing a WhatsApp Business API account:
+#   telegram — live once TELEGRAM_BOT_TOKEN/TELEGRAM_BOT_USERNAME are set
+#              (free, no business verification — see channels/telegram.py)
+#   webpush  — live as soon as a VAPID keypair exists (self-generated, no
+#              external account at all — see channels/webpush.py)
+#   email    — live once RESEND_API_KEY is set (see channels/email.py)
+# Any channel without its env vars set falls back to a logging stub, so the
+# whole pipeline is testable end-to-end regardless of which are configured.
 
-PHONE_RE = re.compile(r"^\+?[0-9]{10,15}$")
+EMAIL_RE = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
 
 
 class AlertRequest(BaseModel):
-    phone: str
+    channel: Literal["telegram", "webpush", "email"]
+    target: str | None = Field(default=None, max_length=2000)
     locality: str = Field(min_length=1, max_length=100)
     bhk: str = Field(min_length=1, max_length=20)
     max_rent: int = Field(gt=0, le=10_000_000)
+
+    @model_validator(mode="after")
+    def _validate_target_for_channel(self):
+        if self.channel == "email":
+            if not self.target or not EMAIL_RE.match(self.target.strip()):
+                raise ValueError("A valid email address is required for the email channel")
+        elif self.channel == "webpush":
+            if not self.target:
+                raise ValueError("A push subscription is required for the webpush channel")
+            try:
+                sub = json.loads(self.target)
+            except json.JSONDecodeError:
+                raise ValueError("target must be a JSON-encoded push subscription")
+            if not isinstance(sub, dict) or "endpoint" not in sub or "keys" not in sub:
+                raise ValueError("target is not a valid push subscription")
+        # telegram: target is intentionally absent at creation — filled in by the
+        # /start webhook once the user actually opens the bot.
+        return self
 
 
 @app.post("/alerts")
 @limiter.limit("5/hour")
 async def create_alert(request: Request, body: AlertRequest):
-    phone = body.phone.strip()
-    if not PHONE_RE.match(phone):
-        raise HTTPException(status_code=422, detail="Invalid phone number")
+    locality, bhk = body.locality.strip(), body.bhk.strip()
 
-    search_id = await alerts_store.create_saved_search(
-        phone, body.locality.strip(), body.bhk.strip(), body.max_rent
+    if body.channel == "webpush":
+        search_id = await alerts_store.create_pending(
+            "webpush", body.target, None, locality, bhk, body.max_rent
+        )
+        await alerts_store.confirm_by_id(search_id)  # browser permission grant IS the opt-in
+        await send_webpush(body.target, f"Subscribed — we'll ping you about new {bhk} matches in {locality}.")
+        return {"id": search_id, "status": "confirmed"}
+
+    if body.channel == "email":
+        confirm_token = secrets.token_urlsafe(24)
+        search_id = await alerts_store.create_pending(
+            "email", body.target.strip(), confirm_token, locality, bhk, body.max_rent
+        )
+        confirm_url = f"{str(request.base_url).rstrip('/')}/alerts/confirm/{confirm_token}"
+        await send_email(
+            body.target.strip(),
+            "Confirm your RentRadar alert",
+            f"Confirm alerts for {bhk} in {locality} under ₹{body.max_rent:,}/mo:\n\n{confirm_url}\n\n"
+            "If you didn't request this, ignore this email.",
+        )
+        return {"id": search_id, "status": "pending_confirmation"}
+
+    # telegram
+    link_token = secrets.token_urlsafe(16)
+    telegram_link = bot_start_link(link_token)
+    if telegram_link is None:
+        raise HTTPException(status_code=503, detail="Telegram channel not configured")
+    search_id = await alerts_store.create_pending(
+        "telegram", None, link_token, locality, bhk, body.max_rent
     )
-    await send_whatsapp(
-        phone,
-        f"RentRadar: Confirm alerts for {body.bhk} in {body.locality} "
-        f"under ₹{body.max_rent:,}/mo? Reply YES to activate.",
-    )
-    return {"id": search_id, "status": "pending_confirmation"}
+    return {"id": search_id, "status": "pending_confirmation", "telegram_link": telegram_link}
 
 
-class WebhookRequest(BaseModel):
-    phone: str
-    message: str = Field(max_length=500)
+class TelegramUpdate(BaseModel):
+    # Only the fields we actually read — Telegram's Update payload has many
+    # more, all ignored (pydantic drops unknown fields by default).
+    message: dict | None = None
 
 
-@app.post("/alerts/webhook")
+@app.post("/alerts/telegram/webhook")
 @limiter.limit("60/minute")
-async def alerts_webhook(request: Request, body: WebhookRequest, x_webhook_secret: str = Header(default="")):
+async def telegram_webhook(
+    request: Request,
+    body: TelegramUpdate,
+    x_telegram_bot_api_secret_token: str = Header(default=""),
+):
     """
-    Inbound WhatsApp message handler. Point your BSP's webhook here once one
-    exists. A "YES" reply confirms the phone's most recent pending saved search
-    — this doubles as WhatsApp's required opt-in confirmation.
+    Inbound Telegram webhook. Point Telegram's setWebhook at this URL with
+    secret_token=TELEGRAM_WEBHOOK_SECRET (Telegram then sends that value back
+    in the X-Telegram-Bot-Api-Secret-Token header on every update — this is
+    Telegram's own signature mechanism, not a placeholder like the old
+    WhatsApp static-secret approach).
 
-    Requires ALERTS_WEBHOOK_SECRET to be set — returns 503 if it isn't, so this
-    can't run unprotected. This is a placeholder shared-secret check; once a
-    real BSP is wired up, replace it with verification of THEIR signature
-    header (e.g. an HMAC over the request body) rather than a static secret,
-    since a static value can't prove the request actually came from WhatsApp.
+    Requires TELEGRAM_WEBHOOK_SECRET to be set — returns 503 if it isn't.
     """
-    secret = os.getenv("ALERTS_WEBHOOK_SECRET")
+    secret = os.getenv("TELEGRAM_WEBHOOK_SECRET")
     if not secret:
-        raise HTTPException(status_code=503, detail="Webhook not configured")
-    if x_webhook_secret != secret:
+        raise HTTPException(status_code=503, detail="Telegram webhook not configured")
+    if x_telegram_bot_api_secret_token != secret:
         raise HTTPException(status_code=403, detail="Forbidden")
 
-    if body.message.strip().upper() != "YES":
+    message = body.message or {}
+    text = (message.get("text") or "").strip()
+    chat_id = (message.get("chat") or {}).get("id")
+
+    if not text.startswith("/start ") or chat_id is None:
         return {"status": "ignored"}
-    confirmed_id = await alerts_store.confirm_latest_for_phone(body.phone.strip())
+
+    link_token = text[len("/start "):].strip()
+    confirmed_id = await alerts_store.confirm_by_token(link_token, target=str(chat_id))
     if confirmed_id is None:
+        await send_telegram(str(chat_id), "That link has expired or was already used.")
         return {"status": "no_pending_search"}
+
+    await send_telegram(str(chat_id), "You're all set — we'll message you here when a new match appears.")
     return {"status": "confirmed", "id": confirmed_id}
+
+
+@app.get("/alerts/confirm/{token}", response_class=HTMLResponse)
+async def confirm_email_alert(token: str):
+    """Landing page for the confirmation link sent to email subscribers."""
+    confirmed_id = await alerts_store.confirm_by_token(token)
+    if confirmed_id is None:
+        message = "This confirmation link is invalid or has already been used."
+    else:
+        message = "You're all set — we'll email you when a new match appears."
+    return f"""<!doctype html><html><head><meta charset="utf-8">
+<title>RentRadar</title></head>
+<body style="font-family:system-ui,sans-serif;text-align:center;padding:4rem 1rem;color:#0f172a;">
+<h1>RentRadar</h1><p>{message}</p></body></html>"""
 
 
 @app.delete("/alerts/{search_id}")

@@ -235,24 +235,29 @@ A floating feedback widget (bottom-right of every page) lets users send a 👍/�
 
 ## Saved-search alerts
 
-After a search returns results, users can enter a phone number to get notified when a new matching listing appears — the "notify me when a 2BHK under ₹25k shows up in Bellandur" flow.
+After a search returns results, users can subscribe to be notified when a new matching listing appears — the "notify me when a 2BHK under ₹25k shows up in Bellandur" flow. Three channels, chosen deliberately because **none of them require a WhatsApp Business API account** (no GST/business verification, no dedicated phone number):
 
-**Status: fully built, WhatsApp sending is a stub.** There is no WhatsApp Business API account wired up yet (see [whatsapp.py](backend/whatsapp.py)) — every send just logs what would have gone out, so the rest of the pipeline can be exercised end-to-end today. Swapping in a real provider (e.g. AiSensy) later only requires rewriting the body of `send_whatsapp()`.
+| Channel | Opt-in flow | Setup to go live |
+|---|---|---|
+| **Telegram** | Deep link (`t.me/YourBot?start=<token>`) opens the bot; a `/start` message confirms | Message `@BotFather` → `/newbot` (~2 min, free, no business verification) → set `TELEGRAM_BOT_TOKEN` + `TELEGRAM_BOT_USERNAME` |
+| **Web Push** | Browser's native permission prompt; subscribing IS the confirmation, no extra step | Zero external account — generate a keypair with `python -m channels.webpush` (from `backend/`), set `VAPID_PRIVATE_KEY` + `VAPID_SUBJECT` server-side and `NEXT_PUBLIC_VAPID_PUBLIC_KEY` on the frontend |
+| **Email** | Confirmation link sent to the address; clicking it confirms | Sign up at [resend.com](https://resend.com) (no GST needed), set `RESEND_API_KEY` |
 
-**Storage:** SQLite (`backend/alerts.db`, git-ignored) via `aiosqlite` — `saved_searches` and `seen_listings` tables, initialised automatically on backend startup (see `db.py`). Deliberately not Postgres: zero infra to provision pre-launch. Move to a real Postgres pool if usage grows past a single instance.
+Any channel without its env vars set falls back to a logging stub (see `backend/channels/`), so the whole pipeline — signup, matching, dedup — is testable end-to-end regardless of which channels are actually live.
+
+**Storage:** SQLite (`backend/alerts.db`, git-ignored) via `aiosqlite` — `saved_searches` (with `channel`/`target`/`confirm_token` columns covering all three flows) and `seen_listings`, initialised automatically on backend startup (see `db.py`). Deliberately not Postgres: zero infra to provision pre-launch. Move to a real Postgres pool if usage grows past a single instance.
 
 **Endpoints:**
 
 | Endpoint | Purpose |
 |----------|---------|
-| `POST /alerts` | Create a saved search (phone, locality, bhk, max_rent). Sends a WhatsApp confirmation request. |
-| `POST /alerts/webhook` | Inbound WhatsApp message handler — a "YES" reply confirms the most recent pending search for that phone. Point your BSP's webhook here once one exists. Requires an `X-Webhook-Secret` header matching `ALERTS_WEBHOOK_SECRET` — returns 503 if unset. This is a placeholder; replace with real BSP signature verification when going live (see the docstring in `main.py`). |
+| `POST /alerts` | Create a saved search on one of `telegram` / `webpush` / `email`. Response shape differs per channel — see `main.py`'s `AlertRequest` validator. |
+| `POST /alerts/telegram/webhook` | Inbound Telegram update; a `/start <token>` message confirms. Requires Telegram's own `X-Telegram-Bot-Api-Secret-Token` header to match `TELEGRAM_WEBHOOK_SECRET` (set via Telegram's `setWebhook` `secret_token` param) — returns 503 if unset. |
+| `GET /alerts/confirm/{token}` | Email confirmation link target — renders a simple HTML success/failure page. |
 | `DELETE /alerts/{id}` | Deactivate a saved search. |
-| `POST /internal/run-alerts` | Checks every active, confirmed saved search for new matches and fires alerts. Requires an `X-Internal-Secret` header matching `ALERTS_INTERNAL_SECRET` — returns 503 if that env var isn't set, so it can't run unprotected by accident. Meant to be called by a scheduler (e.g. a Render Cron Job hitting this every 30–60 min), not by the frontend. |
+| `POST /internal/run-alerts` | Checks every active, confirmed saved search for new matches and fires alerts. Requires an `X-Internal-Secret` header matching `ALERTS_INTERNAL_SECRET` — returns 503 if that env var isn't set. Meant to be called by a scheduler (e.g. a Render Cron Job hitting this every 30–60 min), not by the frontend. |
 
 The matching worker ([alert_worker.py](backend/alert_worker.py)) intentionally skips the LLM synthesis step used by `/search` — it calls the NoBroker/OLX/Housing.com scrapers directly and only alerts on listings with a parsed price at or under budget, keeping each run to Anakin search credits only (no Groq tokens spent on unattended background checks).
-
-**To go live:** set `AISENSY_API_KEY` (or your chosen BSP's key) once an account and approved WhatsApp templates exist, implement the real send call in `whatsapp.py`, set `ALERTS_INTERNAL_SECRET` and `ALERTS_WEBHOOK_SECRET`, and wire a Render Cron Job to call `POST /internal/run-alerts`.
 
 ---
 
@@ -262,10 +267,9 @@ A few things worth knowing if you're deploying this for real users, not just loc
 
 - **CORS is scoped to this project's own domains** — `http://localhost:3000` for dev, plus a regex matching only `rentradar*.vercel.app` (Vercel's preview-deployment naming convention) for production. Add any custom domain via the comma-separated `EXTRA_ORIGINS` env var. Earlier this allowed *any* `*.vercel.app` or `*.onrender.com` app with credentials — that's been tightened.
 - **`/docs`, `/redoc`, and `/openapi.json` are disabled.** This API is only ever called by RentRadar's own frontend, not third parties, so a public schema is pure reconnaissance for an attacker.
-- **Rate limiting** via `slowapi`, in-memory (fine for a single instance — move to a Redis-backed store via `Limiter(storage_uri=...)` if this ever scales past one): `/search` 10/10min, `/alerts` create 5/hour, `/feedback` 20/hour, `/alerts/webhook` 60/min per IP.
-- **Every request body field has a length/range cap** (`SearchRequest.query`, `AlertRequest.locality`/`bhk`/`max_rent`, `FeedbackRequest.message`/`query`) — rejected at validation time, not accepted then truncated, so oversized payloads never reach Anakin/Groq calls that cost real money.
-- **`/alerts/webhook` requires `ALERTS_WEBHOOK_SECRET`**, same fail-closed pattern as `/internal/run-alerts` — without it, anyone could confirm someone else's pending saved search directly, without that person ever seeing the WhatsApp confirmation message.
-- **Phone numbers are masked in logs** (`***1234`), even in the WhatsApp stub — so this is already correct once real sends replace the stub.
+- **Rate limiting** via `slowapi`, in-memory (fine for a single instance — move to a Redis-backed store via `Limiter(storage_uri=...)` if this ever scales past one): `/search` 10/10min, `/alerts` create 5/hour, `/feedback` 20/hour, `/alerts/telegram/webhook` 60/min per IP.
+- **Every request body field has a length/range cap** (`SearchRequest.query`, `AlertRequest.locality`/`bhk`/`max_rent`/`target`, `FeedbackRequest.message`/`query`) — rejected at validation time, not accepted then truncated, so oversized payloads never reach Anakin/Groq calls that cost real money.
+- **`/alerts/telegram/webhook` requires Telegram's own signature** — `X-Telegram-Bot-Api-Secret-Token` must match `TELEGRAM_WEBHOOK_SECRET`, which Telegram itself echoes back on every call once set via `setWebhook`'s `secret_token` param — not a static placeholder like an earlier WhatsApp-based design would have needed. Email and web push don't need an equivalent: email confirmation is protected by an unguessable per-search token, and web push confirmation is an immediate browser permission grant with no separate step to spoof.
 - **Dependency scan**: `pip-audit` and `npm audit` were run against this repo. Next.js was bumped to 14.2.35 (patches a critical middleware auth-bypass CVE, safe within the same minor version). Some Starlette and Next.js CVEs remain unpatched by design — they require a FastAPI/Next major version bump and don't apply to how this app actually uses those frameworks (no file uploads, no class-based endpoints, no `next/image`, no middleware, no WebSockets). Worth re-checking `pip-audit` / `npm audit` before a real launch, since that calculus can change as the app grows.
 
 ---

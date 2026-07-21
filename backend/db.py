@@ -17,7 +17,13 @@ DB_PATH = Path(__file__).parent / "alerts.db"
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS saved_searches (
     id              TEXT PRIMARY KEY,
-    phone           TEXT NOT NULL,
+    channel         TEXT NOT NULL,  -- 'telegram' | 'webpush' | 'email'
+    target          TEXT,           -- telegram chat id / JSON push subscription / email address.
+                                     -- NULL for telegram until the /start webhook confirms it.
+    confirm_token   TEXT,           -- one-time token: the /start payload for telegram,
+                                     -- the confirm-link token for email. NULL for webpush
+                                     -- (browser permission grant IS the confirmation) and
+                                     -- cleared once a channel confirms.
     locality        TEXT NOT NULL,
     bhk             TEXT NOT NULL,
     max_rent        INTEGER NOT NULL,
@@ -34,7 +40,7 @@ CREATE TABLE IF NOT EXISTS seen_listings (
     PRIMARY KEY (saved_search_id, ref_hash)
 );
 
-CREATE INDEX IF NOT EXISTS idx_saved_searches_phone ON saved_searches(phone);
+CREATE INDEX IF NOT EXISTS idx_saved_searches_confirm_token ON saved_searches(confirm_token);
 """
 
 _conn: aiosqlite.Connection | None = None

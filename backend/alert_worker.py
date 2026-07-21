@@ -19,9 +19,25 @@ import logging
 import alerts_store
 from prompts import extract_price_int
 from tools.scraper import fetch_nobroker, fetch_olx, fetch_housing
-from whatsapp import send_whatsapp
+from channels.telegram import send_telegram
+from channels.webpush import send_webpush
+from channels.email import send_email
 
 logger = logging.getLogger("rentradar.alerts")
+
+_SENDERS = {
+    "telegram": lambda target, message: send_telegram(target, message),
+    "webpush": lambda target, message: send_webpush(target, message),
+    "email": lambda target, message: send_email(target, "RentRadar: new match found", message),
+}
+
+
+async def _dispatch(channel: str, target: str, message: str) -> bool:
+    sender = _SENDERS.get(channel)
+    if sender is None:
+        logger.error("Unknown alert channel: %s", channel)
+        return False
+    return await sender(target, message)
 
 
 def _ref_hash(url: str) -> str:
@@ -62,6 +78,13 @@ async def run_all_alerts() -> dict:
 
     for s in searches:
         checked += 1
+        if not s.get("target"):
+            # Shouldn't happen — list_active_confirmed() only returns confirmed
+            # rows, and confirmation always sets target — but never crash the
+            # whole run over one bad row.
+            errors += 1
+            logger.error("Confirmed saved_search_id=%s has no target — skipping", s["id"])
+            continue
         try:
             matches = await _find_matches(s["locality"], s["bhk"], s["max_rent"])
             for m in matches:
@@ -69,10 +92,10 @@ async def run_all_alerts() -> dict:
                 if await alerts_store.has_seen(s["id"], ref):
                     continue
                 message = (
-                    f"RentRadar: New {s['bhk']} match in {s['locality']} — "
+                    f"New {s['bhk']} match in {s['locality']} — "
                     f"₹{m['price']:,}/mo on {m['source']}. {m['url']}"
                 )
-                if await send_whatsapp(s["phone"], message):
+                if await _dispatch(s["channel"], s["target"], message):
                     sent += 1
                 await alerts_store.mark_seen(s["id"], ref)
             await alerts_store.mark_checked(s["id"])
