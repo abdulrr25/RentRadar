@@ -16,4 +16,9 @@ services:
       # until a persistent disk or external DB is attached.
       - key: ALERTS_INTERNAL_SECRET
         sync: false
+      # Optional — enables POST /alerts/webhook (inbound WhatsApp confirmation).
+      # Leave unset to keep it disabled. Placeholder until real BSP signature
+      # verification replaces it — see main.py.
+      - key: ALERTS_WEBHOOK_SECRET
+        sync: false
     healthCheckPath: /health

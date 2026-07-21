@@ -21,6 +21,12 @@ logger = logging.getLogger("rentradar.whatsapp")
 WHATSAPP_LIVE = bool(os.getenv("AISENSY_API_KEY"))
 
 
+def _mask_phone(phone: str) -> str:
+    """PII — never log a full phone number, even in stub mode."""
+    p = phone.strip()
+    return f"***{p[-4:]}" if len(p) >= 4 else "***"
+
+
 async def send_whatsapp(phone: str, message: str) -> bool:
     """
     Send a WhatsApp message. Returns True if "sent" (stub: always True unless
@@ -29,11 +35,11 @@ async def send_whatsapp(phone: str, message: str) -> bool:
     Stub mode (default): logs the message instead of calling any API.
     """
     if not phone or len(phone.strip()) < 8:
-        logger.warning("Refusing to send — invalid phone: %r", phone)
+        logger.warning("Refusing to send — invalid phone: %r", _mask_phone(phone or ""))
         return False
 
     if not WHATSAPP_LIVE:
-        logger.info("[WHATSAPP STUB] to=%s message=%r", phone, message)
+        logger.info("[WHATSAPP STUB] to=%s message=%r", _mask_phone(phone), message)
         return True
 
     # AISENSY_API_KEY is set but no real integration has been written yet —

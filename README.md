@@ -232,13 +232,27 @@ After a search returns results, users can enter a phone number to get notified w
 | Endpoint | Purpose |
 |----------|---------|
 | `POST /alerts` | Create a saved search (phone, locality, bhk, max_rent). Sends a WhatsApp confirmation request. |
-| `POST /alerts/webhook` | Inbound WhatsApp message handler — a "YES" reply confirms the most recent pending search for that phone. Point your BSP's webhook here once one exists. |
+| `POST /alerts/webhook` | Inbound WhatsApp message handler — a "YES" reply confirms the most recent pending search for that phone. Point your BSP's webhook here once one exists. Requires an `X-Webhook-Secret` header matching `ALERTS_WEBHOOK_SECRET` — returns 503 if unset. This is a placeholder; replace with real BSP signature verification when going live (see the docstring in `main.py`). |
 | `DELETE /alerts/{id}` | Deactivate a saved search. |
 | `POST /internal/run-alerts` | Checks every active, confirmed saved search for new matches and fires alerts. Requires an `X-Internal-Secret` header matching `ALERTS_INTERNAL_SECRET` — returns 503 if that env var isn't set, so it can't run unprotected by accident. Meant to be called by a scheduler (e.g. a Render Cron Job hitting this every 30–60 min), not by the frontend. |
 
 The matching worker ([alert_worker.py](backend/alert_worker.py)) intentionally skips the LLM synthesis step used by `/search` — it calls the NoBroker/OLX/Housing.com scrapers directly and only alerts on listings with a parsed price at or under budget, keeping each run to Anakin search credits only (no Groq tokens spent on unattended background checks).
 
-**To go live:** set `AISENSY_API_KEY` (or your chosen BSP's key) once an account and approved WhatsApp templates exist, implement the real send call in `whatsapp.py`, set `ALERTS_INTERNAL_SECRET`, and wire a Render Cron Job to call `POST /internal/run-alerts`.
+**To go live:** set `AISENSY_API_KEY` (or your chosen BSP's key) once an account and approved WhatsApp templates exist, implement the real send call in `whatsapp.py`, set `ALERTS_INTERNAL_SECRET` and `ALERTS_WEBHOOK_SECRET`, and wire a Render Cron Job to call `POST /internal/run-alerts`.
+
+---
+
+## Security & Hardening
+
+A few things worth knowing if you're deploying this for real users, not just local dev:
+
+- **CORS is scoped to this project's own domains** — `http://localhost:3000` for dev, plus a regex matching only `rentradar*.vercel.app` (Vercel's preview-deployment naming convention) for production. Add any custom domain via the comma-separated `EXTRA_ORIGINS` env var. Earlier this allowed *any* `*.vercel.app` or `*.onrender.com` app with credentials — that's been tightened.
+- **`/docs`, `/redoc`, and `/openapi.json` are disabled.** This API is only ever called by RentRadar's own frontend, not third parties, so a public schema is pure reconnaissance for an attacker.
+- **Rate limiting** via `slowapi`, in-memory (fine for a single instance — move to a Redis-backed store via `Limiter(storage_uri=...)` if this ever scales past one): `/search` 10/10min, `/alerts` create 5/hour, `/feedback` 20/hour, `/alerts/webhook` 60/min per IP.
+- **Every request body field has a length/range cap** (`SearchRequest.query`, `AlertRequest.locality`/`bhk`/`max_rent`, `FeedbackRequest.message`/`query`) — rejected at validation time, not accepted then truncated, so oversized payloads never reach Anakin/Groq calls that cost real money.
+- **`/alerts/webhook` requires `ALERTS_WEBHOOK_SECRET`**, same fail-closed pattern as `/internal/run-alerts` — without it, anyone could confirm someone else's pending saved search directly, without that person ever seeing the WhatsApp confirmation message.
+- **Phone numbers are masked in logs** (`***1234`), even in the WhatsApp stub — so this is already correct once real sends replace the stub.
+- **Dependency scan**: `pip-audit` and `npm audit` were run against this repo. Next.js was bumped to 14.2.35 (patches a critical middleware auth-bypass CVE, safe within the same minor version). Some Starlette and Next.js CVEs remain unpatched by design — they require a FastAPI/Next major version bump and don't apply to how this app actually uses those frameworks (no file uploads, no class-based endpoints, no `next/image`, no middleware, no WebSockets). Worth re-checking `pip-audit` / `npm audit` before a real launch, since that calculus can change as the app grows.
 
 ---
 
