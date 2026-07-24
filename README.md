@@ -284,6 +284,8 @@ Worth knowing: adding the SDK to the frontend grew the shared JS bundle from ~87
 
 **Proactive status banner** — `backend/source_health.py` tracks whether the last real search had every data source fail (Anakin credits exhausted, network down, etc.) and `GET /health` reports it. The frontend polls this every 60s and shows a dismissible banner *before* anyone even searches, rather than only after they've typed a query and waited. Deliberately does not proactively ping Anakin to check status — that would cost real search credits just to answer "are we healthy," which would make the exact problem this exists to catch worse. This means a fresh restart assumes healthy until the first real search proves otherwise — a decision made for zero added cost, not an oversight.
 
+**Search caching** — `backend/query_cache.py` is a 15-minute in-memory cache keyed on normalized `(locality, bhk, max_rent)`. Two identical searches within that window mean the second one skips Anakin and Groq entirely and replays the first's result — verified live: a repeat search dropped from ~9.3s to ~0.17s with zero additional Anakin/Groq HTTP calls in the logs. Only genuinely successful briefs are ever cached — `sources_unavailable` and `synthesis_failed` results are never cached, since caching a failure would keep serving a stale outage message for the full 15 minutes even after Anakin recovers, directly undermining `source_health.py`'s recovery detection above.
+
 ---
 
 ## License

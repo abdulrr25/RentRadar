@@ -42,6 +42,7 @@ import db
 import alerts_store
 import source_health
 import briefs_store
+import query_cache
 from alert_worker import run_all_alerts
 from channels.telegram import send_telegram, bot_start_link
 from channels.webpush import send_webpush
@@ -148,31 +149,54 @@ async def search(request: Request, body: SearchRequest):
             yield f"data: {json.dumps({'type': 'fetching', 'sources': sources})}\n\n"
             await asyncio.sleep(0)
 
-            # Phase 3: run agent (parallel fetch + LLM synthesis)
-            result = await agent.ainvoke({
-                "query": parsed,
-                "raw_data": [],
-                "brief": "",
-                "error": "",
-            })
+            cached = query_cache.get(parsed["locality"], parsed["bhk"], parsed["max_rent"])
+            if cached is not None:
+                # Identical search within the last 15 min — skip Anakin/Groq
+                # entirely. Only successful briefs are ever cached (see
+                # query_cache.py), so this can never replay a stale outage.
+                for source, status in cached["source_statuses"]:
+                    yield f"data: {json.dumps({'type': 'source_complete', 'source': source, 'status': status})}\n\n"
+                brief = cached["brief"]
+            else:
+                # Phase 3: run agent (parallel fetch + LLM synthesis)
+                result = await agent.ainvoke({
+                    "query": parsed,
+                    "raw_data": [],
+                    "brief": "",
+                    "error": "",
+                })
 
-            # Phase 4: emit per-source completion status
-            for item in result["raw_data"]:
-                yield f"data: {json.dumps({'type': 'source_complete', 'source': item['source'], 'status': item['status']})}\n\n"
-                await asyncio.sleep(0.04)
+                # Phase 4: emit per-source completion status
+                for item in result["raw_data"]:
+                    yield f"data: {json.dumps({'type': 'source_complete', 'source': item['source'], 'status': item['status']})}\n\n"
+                    await asyncio.sleep(0.04)
+
+                brief = result["brief"]
+
+                # Cache only genuinely successful briefs.
+                try:
+                    cache_check = json.loads(brief)
+                except (json.JSONDecodeError, TypeError):
+                    cache_check = None
+                if cache_check and not cache_check.get("sources_unavailable") and not cache_check.get("error"):
+                    query_cache.set(
+                        parsed["locality"], parsed["bhk"], parsed["max_rent"],
+                        [(item["source"], item["status"]) for item in result["raw_data"]],
+                        brief,
+                    )
 
             # Phase 5: final brief
-            yield f"data: {json.dumps({'type': 'brief', 'data': result['brief']})}\n\n"
+            yield f"data: {json.dumps({'type': 'brief', 'data': brief})}\n\n"
             await asyncio.sleep(0)
 
             # Phase 6: persist for sharing — skipped for error/unavailable
             # briefs, which aren't worth a share link. Best-effort: a storage
             # failure never breaks the search the user is looking at.
             try:
-                brief_obj = json.loads(result["brief"])
+                brief_obj = json.loads(brief)
                 if not brief_obj.get("sources_unavailable") and not brief_obj.get("error"):
                     share_id = await briefs_store.save_brief(
-                        parsed["locality"], parsed["bhk"], parsed["max_rent"], result["brief"]
+                        parsed["locality"], parsed["bhk"], parsed["max_rent"], brief
                     )
                     yield f"data: {json.dumps({'type': 'share', 'id': share_id})}\n\n"
             except Exception:

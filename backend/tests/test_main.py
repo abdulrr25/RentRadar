@@ -6,18 +6,20 @@ from fastapi.testclient import TestClient
 import db
 import main
 import source_health
+import query_cache
 
 
 @pytest.fixture
 def client(monkeypatch, tmp_path):
     """
-    Fresh DB file (unique per test via tmp_path), a reset rate limiter, and
-    reset source_health state (module-level global, would otherwise leak
-    "degraded" across tests depending on run order).
+    Fresh DB file (unique per test via tmp_path), a reset rate limiter, reset
+    source_health state, and a cleared query_cache — all module-level globals
+    that would otherwise leak between tests depending on run order.
     """
     monkeypatch.setattr(db, "DATABASE_URL", f"file:{tmp_path / 'test.db'}")
     main.limiter.reset()
     source_health.mark_healthy()
+    query_cache.clear()
     with TestClient(main.app) as c:
         yield c
 
@@ -103,6 +105,48 @@ def test_search_happy_path_streams_expected_events(client, monkeypatch):
     types = [e["type"] for e in events]
     assert types == ["parsed", "fetching", "source_complete", "brief", "share", "done"]
     assert events[0]["data"]["locality"] == "Bellandur"
+
+
+def test_repeat_search_hits_cache_and_skips_agent(client, monkeypatch):
+    call_count = {"n": 0}
+
+    async def fake_ainvoke(state):
+        call_count["n"] += 1
+        return {
+            **state,
+            "raw_data": [{"source": "NoBroker", "status": "ok"}],
+            "brief": json.dumps({"locality": "Bellandur", "top_listings": []}),
+        }
+
+    monkeypatch.setattr(main.agent, "ainvoke", fake_ainvoke)
+
+    first = client.post("/search", json={"query": "2BHK near Bellandur under 25000"})
+    second = client.post("/search", json={"query": "2BHK near Bellandur under 25000"})
+
+    assert first.status_code == 200 and second.status_code == 200
+    assert call_count["n"] == 1, "second identical search should have hit the cache, not re-invoked the agent"
+
+    second_types = [e["type"] for e in _sse_events(second.text)]
+    assert second_types == ["parsed", "fetching", "source_complete", "brief", "share", "done"]
+
+
+def test_search_does_not_cache_sources_unavailable_briefs(client, monkeypatch):
+    call_count = {"n": 0}
+
+    async def fake_ainvoke_unavailable(state):
+        call_count["n"] += 1
+        return {
+            **state,
+            "raw_data": [{"source": "NoBroker", "status": "error"}],
+            "brief": json.dumps({"sources_unavailable": True, "locality": "Bellandur"}),
+        }
+
+    monkeypatch.setattr(main.agent, "ainvoke", fake_ainvoke_unavailable)
+
+    client.post("/search", json={"query": "2BHK near Bellandur under 25000"})
+    client.post("/search", json={"query": "2BHK near Bellandur under 25000"})
+
+    assert call_count["n"] == 2, "an all-sources-failed brief must never be cached — it would block recovery detection"
 
 
 # ── /alerts — webpush (immediate confirmation) ──────────────────────────────

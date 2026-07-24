@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 import db
 import briefs_store
 import main
+import query_cache
 
 
 @pytest_asyncio.fixture
@@ -22,6 +23,7 @@ async def fresh_db(monkeypatch, tmp_path):
 def client(monkeypatch, tmp_path):
     monkeypatch.setattr(db, "DATABASE_URL", f"file:{tmp_path / 'test.db'}")
     main.limiter.reset()
+    query_cache.clear()
     with TestClient(main.app) as c:
         yield c
 
