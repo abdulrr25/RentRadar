@@ -40,6 +40,7 @@ from parser import parse_query
 from agent import agent
 import db
 import alerts_store
+import source_health
 import briefs_store
 from alert_worker import run_all_alerts
 from channels.telegram import send_telegram, bot_start_link
@@ -216,6 +217,11 @@ async def health():
     missing = [k for k in ("ANAKIN_API_KEY", "GROQ_API_KEY") if not os.getenv(k)]
     if missing:
         return {"status": "degraded", "missing_env": missing}
+
+    source_status = source_health.get_status()
+    if source_status["degraded"]:
+        return {"status": "degraded", "reason": source_status["reason"], "since": source_status["since"]}
+
     return {"status": "ok", "service": "RentRadar"}
 
 

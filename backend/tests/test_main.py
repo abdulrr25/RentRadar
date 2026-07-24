@@ -5,16 +5,19 @@ from fastapi.testclient import TestClient
 
 import db
 import main
+import source_health
 
 
 @pytest.fixture
 def client(monkeypatch, tmp_path):
     """
-    Fresh DB file (unique per test via tmp_path) and a reset rate limiter,
-    so tests can't leak state into each other regardless of run order.
+    Fresh DB file (unique per test via tmp_path), a reset rate limiter, and
+    reset source_health state (module-level global, would otherwise leak
+    "degraded" across tests depending on run order).
     """
     monkeypatch.setattr(db, "DATABASE_URL", f"file:{tmp_path / 'test.db'}")
     main.limiter.reset()
+    source_health.mark_healthy()
     with TestClient(main.app) as c:
         yield c
 
@@ -43,6 +46,25 @@ def test_health_degraded_when_env_vars_missing(client, monkeypatch):
     res = client.get("/health")
     assert res.json()["status"] == "degraded"
     assert "ANAKIN_API_KEY" in res.json()["missing_env"]
+
+
+def test_health_degraded_when_sources_failing(client, monkeypatch):
+    monkeypatch.setenv("ANAKIN_API_KEY", "x")
+    monkeypatch.setenv("GROQ_API_KEY", "y")
+    source_health.mark_degraded("all sources failed in a real search")
+    res = client.get("/health")
+    assert res.json()["status"] == "degraded"
+    assert res.json()["reason"] == "all sources failed in a real search"
+    assert res.json()["since"] is not None
+
+
+def test_health_recovers_after_mark_healthy(client, monkeypatch):
+    monkeypatch.setenv("ANAKIN_API_KEY", "x")
+    monkeypatch.setenv("GROQ_API_KEY", "y")
+    source_health.mark_degraded("temporary failure")
+    source_health.mark_healthy()
+    res = client.get("/health")
+    assert res.json()["status"] == "ok"
 
 
 # ── API docs should not be publicly exposed ─────────────────────────────────

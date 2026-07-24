@@ -6,6 +6,7 @@ import SourceIndicators from "./components/SourceIndicators";
 import RentRadarCard from "./components/RentRadarCard";
 import HowItWorks from "./components/HowItWorks";
 import FeedbackWidget from "./components/FeedbackWidget";
+import StatusBanner from "./components/StatusBanner";
 
 type SourceStatus = "idle" | "fetching" | "ok" | "error";
 const ALL_SOURCES = ["Reddit", "Google News", "Hacker News", "NoBroker", "OLX", "Housing.com"];
@@ -123,6 +124,8 @@ export default function Home() {
           </nav>
         </div>
       </header>
+
+      <StatusBanner />
 
       <main className="flex-1">
 

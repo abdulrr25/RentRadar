@@ -27,6 +27,7 @@ from groq import Groq
 from tools.holocron import fetch_reddit, fetch_google_news, fetch_hackernews
 from tools.scraper import fetch_nobroker, fetch_olx, fetch_housing
 from prompts import SYSTEM_PROMPT, build_context
+import source_health
 
 
 def _groq_client() -> Groq:
@@ -109,6 +110,10 @@ async def synthesis_node(state: RentRadarState) -> RentRadarState:
     if state["raw_data"] and all(
         item.get("status") != "ok" for item in state["raw_data"]
     ):
+        source_health.mark_degraded(
+            "All live data sources failed on the last search — likely Anakin "
+            "credits exhausted or a network issue."
+        )
         return {
             **state,
             "brief": json.dumps({
@@ -119,6 +124,9 @@ async def synthesis_node(state: RentRadarState) -> RentRadarState:
                            "or the network is down. Please try again shortly.",
             }),
         }
+
+    # At least one source came back — sources are healthy again.
+    source_health.mark_healthy()
 
     context, ref_map = build_context(state["raw_data"], state["query"])
 
