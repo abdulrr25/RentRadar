@@ -4,6 +4,7 @@ import { useMemo } from "react";
 import ListingCards from "./ListingCards";
 import LocalityScores from "./LocalityScores";
 import AlertSignup from "./AlertSignup";
+import ShareButton from "./ShareButton";
 
 interface RentBrief {
   locality?: string;
@@ -26,6 +27,7 @@ interface RentBrief {
 interface Props {
   rawBrief: string;
   parsedQuery?: { locality?: string; bhk?: string; max_rent?: number } | null;
+  shareId?: string | null;
 }
 
 const TREND: Record<string, { color: string; bg: string; border: string; arrow: string }> = {
@@ -47,7 +49,7 @@ function Divider() {
   return <div className="border-t border-slate-200 mx-5 sm:mx-7" />;
 }
 
-export default function RentRadarCard({ rawBrief, parsedQuery }: Props) {
+export default function RentRadarCard({ rawBrief, parsedQuery, shareId }: Props) {
   const brief: RentBrief | null = useMemo(() => {
     try {
       const s = rawBrief.replace(/^```json\s*/i, "").replace(/```\s*$/m, "").trim();
@@ -110,6 +112,11 @@ export default function RentRadarCard({ rawBrief, parsedQuery }: Props) {
           )}
         </div>
         {brief.trend_note && <p className="mt-3 text-xs text-indigo-200 leading-relaxed">{brief.trend_note}</p>}
+        {shareId && parsedQuery?.locality && parsedQuery?.bhk && parsedQuery?.max_rent && (
+          <div className="mt-4 flex justify-end">
+            <ShareButton shareId={shareId} locality={parsedQuery.locality} bhk={parsedQuery.bhk} maxRent={parsedQuery.max_rent} />
+          </div>
+        )}
       </div>
 
       {/* Budget note */}

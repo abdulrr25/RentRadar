@@ -1,12 +1,12 @@
 """
-SQLite storage for saved-search alerts.
+SQLite storage for saved-search alerts and shareable briefs.
 
 Deliberately not Postgres: zero infra to provision while the feature is
 pre-launch. aiosqlite gives us real transactional updates (unlike the
 append-only feedback.jsonl pattern), which saved_searches needs for
 confirm/deactivate/last_checked_at. If usage grows past a single instance,
-swap this module for a Postgres pool — alerts_store.py is the only caller,
-so the migration surface is small.
+swap this module for a Postgres pool — alerts_store.py and briefs_store.py
+are the only callers, so the migration surface is small.
 """
 
 import aiosqlite
@@ -41,6 +41,17 @@ CREATE TABLE IF NOT EXISTS seen_listings (
 );
 
 CREATE INDEX IF NOT EXISTS idx_saved_searches_confirm_token ON saved_searches(confirm_token);
+
+CREATE TABLE IF NOT EXISTS briefs (
+    id         TEXT PRIMARY KEY,   -- short URL-safe token, e.g. "Xy3kP9aQ"
+    locality   TEXT NOT NULL,
+    bhk        TEXT NOT NULL,
+    max_rent   INTEGER NOT NULL,
+    brief_json TEXT NOT NULL,      -- the full synthesized brief as sent to the client
+    created_at INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_briefs_created_at ON briefs(created_at);
 """
 
 _conn: aiosqlite.Connection | None = None

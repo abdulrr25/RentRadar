@@ -79,7 +79,7 @@ def test_search_happy_path_streams_expected_events(client, monkeypatch):
     assert res.status_code == 200
     events = _sse_events(res.text)
     types = [e["type"] for e in events]
-    assert types == ["parsed", "fetching", "source_complete", "brief", "done"]
+    assert types == ["parsed", "fetching", "source_complete", "brief", "share", "done"]
     assert events[0]["data"]["locality"] == "Bellandur"
 
 

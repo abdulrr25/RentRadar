@@ -19,6 +19,7 @@ export default function Home() {
   const [parsedQuery, setParsedQuery] = useState<Record<string, any> | null>(null);
   const [hasSearched, setHasSearched] = useState(false);
   const [lastQuery, setLastQuery]     = useState("");
+  const [shareId, setShareId]         = useState<string | null>(null);
   const abortRef                      = useRef<AbortController | null>(null);
 
   useEffect(() => { return () => { abortRef.current?.abort(); }; }, []);
@@ -27,7 +28,7 @@ export default function Home() {
     abortRef.current?.abort();
     abortRef.current = new AbortController();
     setLoading(true); setHasSearched(true); setLastQuery(query);
-    setBrief(null); setError(null); setParsedQuery(null);
+    setBrief(null); setError(null); setParsedQuery(null); setShareId(null);
     setSources([]); setStatuses({});
 
     try {
@@ -63,6 +64,7 @@ export default function Home() {
                 setStatuses((prev) => ({ ...prev, [event.source]: event.status === "ok" ? "ok" : "error" }));
                 break;
               case "brief":  setBrief(event.data); break;
+              case "share":  setShareId(event.id ?? null); break;
               case "done":   setLoading(false); break;
               case "error":  setError(event.message ?? "Something went wrong."); setLoading(false); break;
             }
@@ -205,7 +207,7 @@ export default function Home() {
 
         {/* ── Results ───────────────────────────────────────────────────── */}
         <section className="mx-auto max-w-2xl px-4 sm:px-6 pb-24">
-          {brief && <RentRadarCard rawBrief={brief} parsedQuery={parsedQuery} />}
+          {brief && <RentRadarCard rawBrief={brief} parsedQuery={parsedQuery} shareId={shareId} />}
           {loading && !brief && (
             <div className="mt-6 space-y-3">
               {[...Array(3)].map((_, i) => (

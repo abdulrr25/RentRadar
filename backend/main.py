@@ -40,6 +40,7 @@ from parser import parse_query
 from agent import agent
 import db
 import alerts_store
+import briefs_store
 from alert_worker import run_all_alerts
 from channels.telegram import send_telegram, bot_start_link
 from channels.webpush import send_webpush
@@ -109,6 +110,7 @@ async def search(request: Request, body: SearchRequest):
       fetching        — list of sources being fetched
       source_complete — per-source status as each finishes
       brief           — final synthesized JSON string
+      share           — {id} of the persisted brief, for building a share link
       done            — stream end signal
       error           — pipeline error message (no internal details exposed)
     """
@@ -144,6 +146,20 @@ async def search(request: Request, body: SearchRequest):
             # Phase 5: final brief
             yield f"data: {json.dumps({'type': 'brief', 'data': result['brief']})}\n\n"
             await asyncio.sleep(0)
+
+            # Phase 6: persist for sharing — skipped for error/unavailable
+            # briefs, which aren't worth a share link. Best-effort: a storage
+            # failure never breaks the search the user is looking at.
+            try:
+                brief_obj = json.loads(result["brief"])
+                if not brief_obj.get("sources_unavailable") and not brief_obj.get("error"):
+                    share_id = await briefs_store.save_brief(
+                        parsed["locality"], parsed["bhk"], parsed["max_rent"], result["brief"]
+                    )
+                    yield f"data: {json.dumps({'type': 'share', 'id': share_id})}\n\n"
+            except Exception:
+                logger.exception("Failed to persist shareable brief")
+
             yield f"data: {json.dumps({'type': 'done'})}\n\n"
 
         except Exception as e:
@@ -159,6 +175,23 @@ async def search(request: Request, body: SearchRequest):
             "X-Accel-Buffering": "no",
         },
     )
+
+
+@app.get("/brief/{brief_id}")
+@limiter.limit("120/minute")
+async def get_shared_brief(request: Request, brief_id: str):
+    """
+    Fetch a persisted brief for the /s/{id} share page. Generous rate limit:
+    these requests arrive server-side from the Next.js host's small set of
+    egress IPs, so a strict per-IP cap would throttle all share viewers
+    collectively, not per-person.
+    """
+    if len(brief_id) > 32:
+        raise HTTPException(status_code=404, detail="Not found")
+    record = await briefs_store.get_brief(brief_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail="Not found")
+    return record
 
 
 @app.get("/health")
