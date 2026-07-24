@@ -49,6 +49,23 @@ from channels.email import send_email
 logging.basicConfig(level=logging.INFO, format="%(levelname)s:%(name)s:%(message)s")
 logger = logging.getLogger("rentradar")
 
+# Error tracking — no-op until SENTRY_DSN is set (same stubbed-until-configured
+# pattern as every other integration in this backend). This is what would
+# have surfaced the Anakin quota exhaustion in real time instead of it only
+# being noticed by reading logs after the fact.
+_sentry_dsn = os.getenv("SENTRY_DSN")
+if _sentry_dsn:
+    import sentry_sdk
+    from sentry_sdk.integrations.fastapi import FastApiIntegration
+
+    sentry_sdk.init(
+        dsn=_sentry_dsn,
+        integrations=[FastApiIntegration()],
+        environment=os.getenv("SENTRY_ENVIRONMENT", "production"),
+        traces_sample_rate=0.1,  # light request tracing; errors are always captured regardless
+    )
+    logger.info("Sentry error tracking enabled")
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):

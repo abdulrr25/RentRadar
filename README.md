@@ -274,6 +274,16 @@ A few things worth knowing if you're deploying this for real users, not just loc
 
 ---
 
+## Observability
+
+**Error tracking** via Sentry (`sentry-sdk[fastapi]` on the backend, `@sentry/nextjs` on the frontend) — no-op until `SENTRY_DSN`/`NEXT_PUBLIC_SENTRY_DSN` are set, same stubbed-by-default pattern as every alert channel. Without this wired up, the only way to notice an outage (e.g. Anakin's search-credit balance hitting zero, which has actually happened during this project's own development) was reading server logs after a user complained. With it, both halves of the app report real-time to one place.
+
+Worth knowing: adding Sentry to the frontend grew the shared JS bundle from ~87 KB to ~164 KB First Load JS — a real cost, not a rounding error, and the tradeoff for actually knowing when production breaks rather than finding out from a user.
+
+`SENTRY_ORG`/`SENTRY_PROJECT`/`SENTRY_AUTH_TOKEN` are optional on top of the DSN — they only enable build-time source map upload for cleaner stack traces; the build succeeds without them either way.
+
+---
+
 ## License
 
 MIT © [abdulrr25](https://github.com/abdulrr25)

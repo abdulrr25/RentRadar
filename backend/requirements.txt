@@ -8,3 +8,4 @@ pydantic>=2.7.4
 libsql-client==0.3.1
 slowapi==0.1.9
 pywebpush==2.0.1
+sentry-sdk[fastapi]==2.66.1
