@@ -9,10 +9,8 @@ interface Props {
   maxRent: number;
 }
 
-type Channel = "telegram" | "webpush" | "email";
+type Channel = "telegram" | "webpush";
 type Status = "idle" | "working" | "confirmed" | "pending" | "error";
-
-const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
 function urlBase64ToUint8Array(base64Url: string): Uint8Array {
   const padding = "=".repeat((4 - (base64Url.length % 4)) % 4);
@@ -32,17 +30,31 @@ async function createAlert(payload: Record<string, unknown>) {
   return { ok: res.ok, data: await res.json().catch(() => ({})) };
 }
 
-const CHANNELS: { id: Channel; label: string; icon: string }[] = [
-  { id: "telegram", label: "Telegram", icon: "✈️" },
-  { id: "webpush", label: "Browser", icon: "🔔" },
-  { id: "email", label: "Email", icon: "✉️" },
+const CHANNELS: { id: Channel; label: string; icon: React.ReactNode }[] = [
+  {
+    id: "telegram",
+    label: "Telegram",
+    icon: (
+      <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M22 2 11 13" /><path d="M22 2 15 22l-4-9-9-4z" />
+      </svg>
+    ),
+  },
+  {
+    id: "webpush",
+    label: "Browser",
+    icon: (
+      <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" />
+      </svg>
+    ),
+  },
 ];
 
 export default function AlertSignup({ locality, bhk, maxRent }: Props) {
   const [dismissed, setDismissed] = useState(false);
   const [channel, setChannel] = useState<Channel | null>(null);
   const [status, setStatus] = useState<Status>("idle");
-  const [email, setEmail] = useState("");
   const [telegramLink, setTelegramLink] = useState<string | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
@@ -94,19 +106,6 @@ export default function AlertSignup({ locality, bhk, maxRent }: Props) {
     }
   };
 
-  const startEmail = async () => {
-    if (!EMAIL_RE.test(email.trim())) return;
-    setStatus("working");
-    setErrorMsg(null);
-    const { ok, data } = await createAlert({ channel: "email", target: email.trim(), ...base });
-    if (!ok || data.status !== "pending_confirmation") {
-      setStatus("error");
-      setErrorMsg("Couldn't send — please try again.");
-      return;
-    }
-    setStatus("pending");
-  };
-
   if (dismissed) return null;
 
   return (
@@ -131,7 +130,10 @@ export default function AlertSignup({ locality, bhk, maxRent }: Props) {
 
       {status === "confirmed" && (
         <p className="mt-3 flex items-center gap-2 text-sm text-brand-800">
-          <span>✅</span> You're subscribed — we'll notify you here in the browser.
+          <svg viewBox="0 0 24 24" className="h-4 w-4 flex-shrink-0 text-emerald-600" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />
+          </svg>
+          You're subscribed — we'll notify you here in the browser.
         </p>
       )}
 
@@ -146,12 +148,6 @@ export default function AlertSignup({ locality, bhk, maxRent }: Props) {
         </p>
       )}
 
-      {status === "pending" && channel === "email" && (
-        <p className="mt-3 text-sm text-brand-800">
-          Almost there — check <strong>{email}</strong> for a confirmation link.
-        </p>
-      )}
-
       {(status === "idle" || status === "working" || status === "error") && (
         <>
           <div className="mt-3 flex gap-2">
@@ -159,7 +155,7 @@ export default function AlertSignup({ locality, bhk, maxRent }: Props) {
               <button
                 key={c.id}
                 onClick={() => { setChannel(c.id); setErrorMsg(null); setStatus("idle"); track("alert_channel_clicked", { channel: c.id }); }}
-                className={`flex-1 rounded-lg border py-2 text-sm font-medium transition ${
+                className={`flex flex-1 items-center justify-center gap-1.5 rounded-lg border py-2 text-sm font-medium transition ${
                   channel === c.id
                     ? "border-brand-400 bg-white text-brand-700"
                     : "border-brand-200 text-brand-600 hover:border-brand-300"
@@ -190,27 +186,6 @@ export default function AlertSignup({ locality, bhk, maxRent }: Props) {
             >
               {status === "working" ? "Requesting permission…" : "Enable browser alerts"}
             </button>
-          )}
-
-          {channel === "email" && (
-            <div className="mt-3 flex gap-2">
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
-                aria-label="Email address for alerts"
-                className="min-w-0 flex-1 rounded-lg border border-brand-200 bg-white px-3 py-2 text-sm text-slate-900 placeholder-slate-400 focus:border-brand-400 focus:outline-none focus:ring-4 focus:ring-brand-100"
-              />
-              <button
-                onClick={startEmail}
-                disabled={!EMAIL_RE.test(email.trim()) || status === "working"}
-                className="flex-shrink-0 rounded-lg px-4 py-2 text-sm font-semibold text-white transition disabled:cursor-not-allowed disabled:opacity-40"
-                style={{ background: "linear-gradient(135deg, #4f46e5 0%, #6d28d9 100%)" }}
-              >
-                {status === "working" ? "Sending…" : "Notify me"}
-              </button>
-            </div>
           )}
 
           {status === "error" && errorMsg && (

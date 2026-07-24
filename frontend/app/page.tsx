@@ -165,9 +165,30 @@ export default function Home() {
             {parsedQuery && (
               <div className="mt-4 flex flex-wrap gap-2">
                 {[
-                  { icon: "📍", val: parsedQuery.locality },
-                  { icon: "🛏", val: parsedQuery.bhk },
-                  { icon: "💰", val: `max ₹${parsedQuery.max_rent?.toLocaleString("en-IN")}` },
+                  {
+                    icon: (
+                      <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z" /><circle cx="12" cy="10" r="3" />
+                      </svg>
+                    ),
+                    val: parsedQuery.locality,
+                  },
+                  {
+                    icon: (
+                      <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M2 4v16" /><path d="M2 8h18a2 2 0 0 1 2 2v10" /><path d="M2 17h20" /><path d="M6 8v9" />
+                      </svg>
+                    ),
+                    val: parsedQuery.bhk,
+                  },
+                  {
+                    icon: (
+                      <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M6 3h12" /><path d="M6 8h12" /><path d="M6 13 15 21" /><path d="M6 13h3c3 0 5-1.5 5-5" />
+                      </svg>
+                    ),
+                    val: `max ₹${parsedQuery.max_rent?.toLocaleString("en-IN")}`,
+                  },
                 ].map(({ icon, val }) => (
                   <span key={val} className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3.5 py-1 text-xs font-medium text-slate-600" style={{ boxShadow: "0 1px 2px rgba(15,23,42,0.05)" }}>
                     {icon} {val}

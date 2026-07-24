@@ -47,7 +47,9 @@ export default function FeedbackWidget({ query }: Props) {
         >
           {state === "sent" ? (
             <div className="py-2 text-center">
-              <p className="text-2xl">🙏</p>
+              <svg viewBox="0 0 24 24" className="mx-auto h-8 w-8 text-emerald-600" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" />
+              </svg>
               <p className="mt-2 text-sm font-semibold text-slate-800">Thanks for the feedback!</p>
               <button onClick={reset} className="mt-3 text-xs font-medium text-brand-600 hover:text-brand-700">
                 Close
@@ -77,7 +79,10 @@ export default function FeedbackWidget({ query }: Props) {
                       : "border-slate-200 text-slate-500 hover:border-slate-300"
                   }`}
                 >
-                  👍 Useful
+                  <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M14 9V5a3 3 0 0 0-3-3l-4 9v11h11.28a2 2 0 0 0 2-1.7l1.38-9a2 2 0 0 0-2-2.3H14z" /><path d="M7 22H4a2 2 0 0 1-2-2v-7a2 2 0 0 1 2-2h3" />
+                  </svg>
+                  Useful
                 </button>
                 <button
                   onClick={() => setRating("down")}
@@ -87,7 +92,10 @@ export default function FeedbackWidget({ query }: Props) {
                       : "border-slate-200 text-slate-500 hover:border-slate-300"
                   }`}
                 >
-                  👎 Not quite
+                  <svg viewBox="0 0 24 24" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M10 15v4a3 3 0 0 0 3 3l4-9V2H5.72a2 2 0 0 0-2 1.7l-1.38 9a2 2 0 0 0 2 2.3H10z" /><path d="M17 2h3a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-3" />
+                  </svg>
+                  Not quite
                 </button>
               </div>
 

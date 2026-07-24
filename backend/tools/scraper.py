@@ -9,8 +9,12 @@ agent can build a diverse, multi-platform listing set and link each listing to
 its specific page.
 """
 
+import logging
 import httpx
 import os
+from urllib.parse import urlparse
+
+logger = logging.getLogger("rentradar.scraper")
 
 SEARCH_URL = "https://api.anakin.io/v1/search"
 
@@ -22,9 +26,27 @@ def _headers() -> dict:
     }
 
 
-async def _search(prompt: str, source_name: str, limit: int = 6) -> dict:
+def _matches_domain(url: str, expected_domain: str) -> bool:
+    try:
+        netloc = urlparse(url).netloc.lower()
+    except ValueError:
+        return False
+    return expected_domain in netloc
+
+
+async def _search(prompt: str, source_name: str, expected_domain: str, limit: int = 6) -> dict:
     """
     Run an Anakin web search and return a list of structured results.
+
+    Anakin's `site:` search restriction is a hint to the underlying search
+    engine, not a hard filter — in practice a meaningful share of results
+    come back from other domains entirely (seen live: a "site:nobroker.in"
+    search returning housing.com, 99acres.com, squareyards.com pages). Every
+    result gets labeled with `source_name` regardless of where it actually
+    came from — passing that straight through would show a "NoBroker" badge
+    linking to a housing.com page, which is actively misleading, not just
+    imprecise. So results are filtered to the expected domain here, before
+    the caller ever sees them, rather than trusting the search query alone.
 
     Returns {source, status, results:[{title, url, snippet}]}. Each result is a
     distinct portal page — the agent picks listings from across all of them.
@@ -38,7 +60,7 @@ async def _search(prompt: str, source_name: str, limit: int = 6) -> dict:
             )
             response.raise_for_status()
             data = response.json()
-            results = [
+            all_results = [
                 {
                     "title": (r.get("title") or "").strip(),
                     "url": r.get("url"),
@@ -47,6 +69,14 @@ async def _search(prompt: str, source_name: str, limit: int = 6) -> dict:
                 for r in data.get("results", [])
                 if r.get("snippet") and r.get("url")
             ]
+
+            results = [r for r in all_results if _matches_domain(r["url"], expected_domain)]
+            dropped = len(all_results) - len(results)
+            if dropped:
+                logger.info(
+                    "%s: dropped %d/%d result(s) not actually on %s",
+                    source_name, dropped, len(all_results), expected_domain,
+                )
 
             if not results:
                 return {"source": source_name, "status": "error", "results": [],
@@ -69,16 +99,16 @@ async def fetch_nobroker(locality: str, bhk: str, max_rent: int) -> dict:
     snippet gives far more reliable results.
     """
     prompt = f'{bhk} flat for rent in {locality} Bangalore site:nobroker.in'
-    return await _search(prompt, "NoBroker")
+    return await _search(prompt, "NoBroker", "nobroker.in")
 
 
 async def fetch_olx(locality: str, bhk: str, max_rent: int) -> dict:
     """Search OLX for rental ads in this locality."""
     prompt = f'{bhk} for rent {locality} Bangalore site:olx.in'
-    return await _search(prompt, "OLX")
+    return await _search(prompt, "OLX", "olx.in")
 
 
 async def fetch_housing(locality: str, bhk: str, max_rent: int) -> dict:
     """Search Housing.com for rental listings in this locality."""
     prompt = f'{bhk} rental flat {locality} Bangalore site:housing.com'
-    return await _search(prompt, "Housing.com")
+    return await _search(prompt, "Housing.com", "housing.com")
