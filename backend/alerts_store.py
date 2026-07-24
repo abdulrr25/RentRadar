@@ -31,19 +31,17 @@ async def create_pending(channel: str, target: str | None, confirm_token: str | 
            VALUES (?, ?, ?, ?, ?, ?, ?, 0, 1, ?)""",
         (search_id, channel, target, confirm_token, locality, bhk, max_rent, int(time.time())),
     )
-    await conn.commit()
     return search_id
 
 
 async def confirm_by_id(search_id: str) -> bool:
     """Confirm a specific saved search (used for webpush, where opt-in is immediate)."""
     conn = get_conn()
-    cursor = await conn.execute(
+    result = await conn.execute(
         "UPDATE saved_searches SET confirmed = 1, confirm_token = NULL WHERE id = ? AND active = 1",
         (search_id,),
     )
-    await conn.commit()
-    return cursor.rowcount > 0
+    return result.rows_affected > 0
 
 
 async def confirm_by_token(confirm_token: str, target: str | None = None) -> str | None:
@@ -54,15 +52,14 @@ async def confirm_by_token(confirm_token: str, target: str | None = None) -> str
     if no active, unconfirmed row has this token.
     """
     conn = get_conn()
-    cursor = await conn.execute(
+    result = await conn.execute(
         """SELECT id FROM saved_searches
            WHERE confirm_token = ? AND confirmed = 0 AND active = 1""",
         (confirm_token,),
     )
-    row = await cursor.fetchone()
-    if row is None:
+    if not result.rows:
         return None
-    search_id = row[0]
+    search_id = result.rows[0][0]
     if target is not None:
         await conn.execute(
             "UPDATE saved_searches SET confirmed = 1, confirm_token = NULL, target = ? WHERE id = ?",
@@ -73,29 +70,26 @@ async def confirm_by_token(confirm_token: str, target: str | None = None) -> str
             "UPDATE saved_searches SET confirmed = 1, confirm_token = NULL WHERE id = ?",
             (search_id,),
         )
-    await conn.commit()
     return search_id
 
 
 async def deactivate(search_id: str) -> bool:
     conn = get_conn()
-    cursor = await conn.execute(
+    result = await conn.execute(
         "UPDATE saved_searches SET active = 0 WHERE id = ?", (search_id,)
     )
-    await conn.commit()
-    return cursor.rowcount > 0
+    return result.rows_affected > 0
 
 
 async def list_active_confirmed() -> list[dict]:
     conn = get_conn()
-    cursor = await conn.execute(
+    result = await conn.execute(
         """SELECT id, channel, target, locality, bhk, max_rent FROM saved_searches
            WHERE confirmed = 1 AND active = 1"""
     )
-    rows = await cursor.fetchall()
     return [
         {"id": r[0], "channel": r[1], "target": r[2], "locality": r[3], "bhk": r[4], "max_rent": r[5]}
-        for r in rows
+        for r in result.rows
     ]
 
 
@@ -105,16 +99,15 @@ async def mark_checked(search_id: str) -> None:
         "UPDATE saved_searches SET last_checked_at = ? WHERE id = ?",
         (int(time.time()), search_id),
     )
-    await conn.commit()
 
 
 async def has_seen(search_id: str, ref_hash: str) -> bool:
     conn = get_conn()
-    cursor = await conn.execute(
+    result = await conn.execute(
         "SELECT 1 FROM seen_listings WHERE saved_search_id = ? AND ref_hash = ?",
         (search_id, ref_hash),
     )
-    return await cursor.fetchone() is not None
+    return len(result.rows) > 0
 
 
 async def mark_seen(search_id: str, ref_hash: str) -> None:
@@ -124,4 +117,3 @@ async def mark_seen(search_id: str, ref_hash: str) -> None:
            VALUES (?, ?, ?)""",
         (search_id, ref_hash, int(time.time())),
     )
-    await conn.commit()

@@ -5,9 +5,14 @@ import alerts_store
 
 
 @pytest_asyncio.fixture
-async def fresh_db(monkeypatch):
-    """Each test gets its own isolated in-memory DB — no cross-test state, no files to clean up."""
-    monkeypatch.setattr(db, "DB_PATH", ":memory:")
+async def fresh_db(monkeypatch, tmp_path):
+    """
+    Each test gets its own isolated DB file — libsql_client's local ':memory:'
+    mode doesn't persist state across separate execute() calls (each one
+    appears to open a fresh connection to it), so a per-test temp file is
+    used instead. tmp_path is unique per test, so isolation still holds.
+    """
+    monkeypatch.setattr(db, "DATABASE_URL", f"file:{tmp_path / 'test.db'}")
     await db.init_db()
     yield
     await db.close_db()

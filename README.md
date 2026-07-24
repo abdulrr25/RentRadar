@@ -118,7 +118,7 @@ pip install -r requirements-dev.txt
 pytest -v
 ```
 
-Tests run against an isolated in-memory SQLite DB per test and a reset rate limiter, so run order never matters. [GitHub Actions](.github/workflows/ci.yml) runs this suite plus a frontend typecheck + production build on every push and PR to `master`.
+Tests run against an isolated DB file per test (via pytest's `tmp_path`) and a reset rate limiter, so run order never matters. [GitHub Actions](.github/workflows/ci.yml) runs this suite plus a frontend typecheck + production build on every push and PR to `master`.
 
 ---
 
@@ -245,7 +245,7 @@ After a search returns results, users can subscribe to be notified when a new ma
 
 Any channel without its env vars set falls back to a logging stub (see `backend/channels/`), so the whole pipeline — signup, matching, dedup — is testable end-to-end regardless of which channels are actually live.
 
-**Storage:** SQLite (`backend/alerts.db`, git-ignored) via `aiosqlite` — `saved_searches` (with `channel`/`target`/`confirm_token` columns covering all three flows) and `seen_listings`, initialised automatically on backend startup (see `db.py`). Deliberately not Postgres: zero infra to provision pre-launch. Move to a real Postgres pool if usage grows past a single instance.
+**Storage:** libSQL via `libsql_client` — `saved_searches` (with `channel`/`target`/`confirm_token` columns covering all three flows), `seen_listings`, and `briefs` (for shareable links), schema initialised automatically on backend startup (see `db.py`). Same client works against either a local file (`DATABASE_URL` unset — zero setup for local dev, defaults to `backend/alerts.db`) or a hosted [Turso](https://turso.tech) database (`DATABASE_URL=libsql://...` + `DATABASE_AUTH_TOKEN`) in production. **Turso in production is not optional** — Render's free-tier disk is wiped on every redeploy, so a local file there means every confirmed alert and every shared link disappears the next time you ship a fix. Turso's free tier needs no GST/business verification and doesn't expire.
 
 **Endpoints:**
 

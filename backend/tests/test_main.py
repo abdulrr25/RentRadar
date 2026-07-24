@@ -8,12 +8,12 @@ import main
 
 
 @pytest.fixture
-def client(monkeypatch):
+def client(monkeypatch, tmp_path):
     """
-    Fresh in-memory DB and a reset rate limiter per test, so tests can't leak
-    state into each other regardless of run order.
+    Fresh DB file (unique per test via tmp_path) and a reset rate limiter,
+    so tests can't leak state into each other regardless of run order.
     """
-    monkeypatch.setattr(db, "DB_PATH", ":memory:")
+    monkeypatch.setattr(db, "DATABASE_URL", f"file:{tmp_path / 'test.db'}")
     main.limiter.reset()
     with TestClient(main.app) as c:
         yield c

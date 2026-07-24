@@ -1,29 +1,32 @@
 """
-SQLite storage for saved-search alerts and shareable briefs.
+libSQL-backed storage for saved-search alerts and shareable briefs.
 
-Deliberately not Postgres: zero infra to provision while the feature is
-pre-launch. aiosqlite gives us real transactional updates (unlike the
-append-only feedback.jsonl pattern), which saved_searches needs for
-confirm/deactivate/last_checked_at. If usage grows past a single instance,
-swap this module for a Postgres pool — alerts_store.py and briefs_store.py
-are the only callers, so the migration surface is small.
+Was plain aiosqlite against a local file — but that file lived on Render's
+default disk, which is wiped on every redeploy (Render's persistent disks
+require a paid instance plan, which this project isn't on). Moved to
+libsql_client instead: it speaks the same SQL dialect and the same client
+API shape (execute/rows/batch), but can point at either a local file
+(dev/tests, zero setup) or a hosted Turso database (production — free
+tier, no expiry, no plan upgrade needed). alerts_store.py and
+briefs_store.py needed only mechanical changes (result.rows instead of a
+separate fetchone() cursor call, no manual commit — each statement
+auto-commits), not a rewrite of their SQL.
 """
 
-import aiosqlite
+import os
 from pathlib import Path
 
-DB_PATH = Path(__file__).parent / "alerts.db"
+import libsql_client
+
+DATABASE_URL = os.getenv("DATABASE_URL", f"file:{Path(__file__).parent / 'alerts.db'}")
+DATABASE_AUTH_TOKEN = os.getenv("DATABASE_AUTH_TOKEN")
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS saved_searches (
     id              TEXT PRIMARY KEY,
-    channel         TEXT NOT NULL,  -- 'telegram' | 'webpush' | 'email'
-    target          TEXT,           -- telegram chat id / JSON push subscription / email address.
-                                     -- NULL for telegram until the /start webhook confirms it.
-    confirm_token   TEXT,           -- one-time token: the /start payload for telegram,
-                                     -- the confirm-link token for email. NULL for webpush
-                                     -- (browser permission grant IS the confirmation) and
-                                     -- cleared once a channel confirms.
+    channel         TEXT NOT NULL,
+    target          TEXT,
+    confirm_token   TEXT,
     locality        TEXT NOT NULL,
     bhk             TEXT NOT NULL,
     max_rent        INTEGER NOT NULL,
@@ -32,45 +35,41 @@ CREATE TABLE IF NOT EXISTS saved_searches (
     created_at      INTEGER NOT NULL,
     last_checked_at INTEGER
 );
-
 CREATE TABLE IF NOT EXISTS seen_listings (
     saved_search_id TEXT NOT NULL REFERENCES saved_searches(id) ON DELETE CASCADE,
     ref_hash        TEXT NOT NULL,
     first_seen_at   INTEGER NOT NULL,
     PRIMARY KEY (saved_search_id, ref_hash)
 );
-
 CREATE INDEX IF NOT EXISTS idx_saved_searches_confirm_token ON saved_searches(confirm_token);
-
 CREATE TABLE IF NOT EXISTS briefs (
-    id         TEXT PRIMARY KEY,   -- short URL-safe token, e.g. "Xy3kP9aQ"
+    id         TEXT PRIMARY KEY,
     locality   TEXT NOT NULL,
     bhk        TEXT NOT NULL,
     max_rent   INTEGER NOT NULL,
-    brief_json TEXT NOT NULL,      -- the full synthesized brief as sent to the client
+    brief_json TEXT NOT NULL,
     created_at INTEGER NOT NULL
 );
-
 CREATE INDEX IF NOT EXISTS idx_briefs_created_at ON briefs(created_at);
 """
 
-_conn: aiosqlite.Connection | None = None
+_client: libsql_client.Client | None = None
 
 
 async def init_db() -> None:
-    global _conn
-    _conn = await aiosqlite.connect(DB_PATH)
-    await _conn.execute("PRAGMA journal_mode=WAL;")
-    await _conn.executescript(SCHEMA)
-    await _conn.commit()
+    global _client
+    kwargs = {"auth_token": DATABASE_AUTH_TOKEN} if DATABASE_AUTH_TOKEN else {}
+    _client = libsql_client.create_client(DATABASE_URL, **kwargs)
+    statements = [s.strip() for s in SCHEMA.split(";") if s.strip()]
+    await _client.batch(statements)
 
 
 async def close_db() -> None:
-    if _conn is not None:
-        await _conn.close()
+    if _client is not None:
+        await _client.close()
 
 
-def get_conn() -> aiosqlite.Connection:
-    if _conn is None:
+def get_conn() -> libsql_client.Client:
+    if _client is None:
         raise RuntimeError("Database not initialised — call init_db() at startup")
-    return _conn
+    return _client

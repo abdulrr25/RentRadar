@@ -11,10 +11,15 @@ services:
         sync: false
       - key: GROQ_API_KEY
         sync: false
+      # Required for saved-search alerts / shareable briefs to survive a
+      # redeploy — Render's own disk on the free plan does not. Point at a
+      # free Turso database (turso.tech) instead of leaving unset in prod.
+      - key: DATABASE_URL
+        sync: false
+      - key: DATABASE_AUTH_TOKEN
+        sync: false
       # Optional — enables POST /internal/run-alerts (saved-search matching worker).
-      # Leave unset to keep it disabled. Note: Render's default disk is not
-      # persistent across deploys, so backend/alerts.db resets on redeploy
-      # until a persistent disk or external DB is attached.
+      # Leave unset to keep it disabled.
       - key: ALERTS_INTERNAL_SECRET
         sync: false
       # Optional — saved-search alert channels. Each is independently stubbed

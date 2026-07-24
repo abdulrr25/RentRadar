@@ -11,16 +11,16 @@ import main
 
 
 @pytest_asyncio.fixture
-async def fresh_db(monkeypatch):
-    monkeypatch.setattr(db, "DB_PATH", ":memory:")
+async def fresh_db(monkeypatch, tmp_path):
+    monkeypatch.setattr(db, "DATABASE_URL", f"file:{tmp_path / 'test.db'}")
     await db.init_db()
     yield
     await db.close_db()
 
 
 @pytest.fixture
-def client(monkeypatch):
-    monkeypatch.setattr(db, "DB_PATH", ":memory:")
+def client(monkeypatch, tmp_path):
+    monkeypatch.setattr(db, "DATABASE_URL", f"file:{tmp_path / 'test.db'}")
     main.limiter.reset()
     with TestClient(main.app) as c:
         yield c
@@ -56,14 +56,13 @@ async def test_expired_brief_not_returned_and_swept(fresh_db):
         "UPDATE briefs SET created_at = ? WHERE id = ?",
         (int(time.time()) - briefs_store._TTL_SECONDS - 60, brief_id),
     )
-    await conn.commit()
 
     assert await briefs_store.get_brief(brief_id) is None
 
     # The next save runs the inline sweep, which should delete the aged row
     await briefs_store.save_brief("Whitefield", "1BHK", 18000, "{}")
-    cursor = await conn.execute("SELECT 1 FROM briefs WHERE id = ?", (brief_id,))
-    assert await cursor.fetchone() is None
+    result = await conn.execute("SELECT 1 FROM briefs WHERE id = ?", (brief_id,))
+    assert not result.rows
 
 
 # ── GET /brief/{id} endpoint ─────────────────────────────────────────────────

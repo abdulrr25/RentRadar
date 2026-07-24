@@ -28,20 +28,19 @@ async def save_brief(locality: str, bhk: str, max_rent: int, brief_json: str) ->
     )
     # Inline TTL sweep — cheap (indexed on created_at) and avoids a cron.
     await conn.execute("DELETE FROM briefs WHERE created_at < ?", (now - _TTL_SECONDS,))
-    await conn.commit()
     return brief_id
 
 
 async def get_brief(brief_id: str) -> dict | None:
     conn = get_conn()
-    cursor = await conn.execute(
+    result = await conn.execute(
         """SELECT locality, bhk, max_rent, brief_json, created_at
            FROM briefs WHERE id = ? AND created_at >= ?""",
         (brief_id, int(time.time()) - _TTL_SECONDS),
     )
-    row = await cursor.fetchone()
-    if row is None:
+    if not result.rows:
         return None
+    row = result.rows[0]
     return {
         "locality": row[0],
         "bhk": row[1],
