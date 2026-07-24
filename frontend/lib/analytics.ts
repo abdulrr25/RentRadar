@@ -1,48 +1,48 @@
 /**
  * Minimal privacy-respecting product analytics — no-op until
- * NEXT_PUBLIC_POSTHOG_KEY is set, same stubbed-until-configured pattern as
- * every other integration in this project (Telegram, Web Push, Sentry, ...).
+ * NEXT_PUBLIC_UMAMI_WEBSITE_ID is set, same stubbed-until-configured pattern
+ * as every other integration in this project (Telegram, Web Push, Sentry, ...).
  *
  * Right now there's zero visibility into search volume, which alert channel
  * gets used, or where people drop off — every product decision from here is
- * a guess. Wired to PostHog specifically because it has a genuine permanent
- * free tier (1M events/month, no card) — not a 14-day trial like Sentry's.
+ * a guess. Wired to Umami specifically: genuinely open-source (MIT,
+ * self-hostable for zero cost on a cheap VPS), and its hosted Cloud tier is
+ * a real permanent free plan — not a 14-day trial like Sentry's.
  *
- * The posthog-js import is dynamic and only reached if a key is configured,
- * so an unconfigured deployment never fetches the analytics chunk at all —
- * zero runtime cost, not just zero events sent.
+ * No client SDK needed — Umami's /api/send endpoint takes a plain JSON POST
+ * and needs no API key (identified by the public website ID only, same
+ * "safe to expose" pattern as a VAPID public key). That also means zero
+ * bundle weight even when configured, unlike a full analytics SDK.
  */
 
-const POSTHOG_KEY = process.env.NEXT_PUBLIC_POSTHOG_KEY;
-const POSTHOG_HOST = process.env.NEXT_PUBLIC_POSTHOG_HOST ?? "https://us.i.posthog.com";
-
-let initPromise: Promise<typeof import("posthog-js").default> | null = null;
-
-async function getClient() {
-  if (!POSTHOG_KEY || typeof window === "undefined") return null;
-  if (!initPromise) {
-    initPromise = import("posthog-js").then(({ default: posthog }) => {
-      posthog.init(POSTHOG_KEY, {
-        api_host: POSTHOG_HOST,
-        capture_pageview: true,
-        autocapture: false, // explicit track() calls only — no click-guessing
-      });
-      return posthog;
-    });
-  }
-  return initPromise;
-}
+const UMAMI_HOST = process.env.NEXT_PUBLIC_UMAMI_HOST ?? "https://cloud.umami.is";
+const UMAMI_WEBSITE_ID = process.env.NEXT_PUBLIC_UMAMI_WEBSITE_ID;
 
 /**
  * Fire-and-forget event tracking. Safe to call unconditionally from any
  * component — it's a true no-op (not even a network request) when
- * NEXT_PUBLIC_POSTHOG_KEY isn't set.
+ * NEXT_PUBLIC_UMAMI_WEBSITE_ID isn't set.
  */
 export function track(event: string, properties?: Record<string, unknown>): void {
-  if (!POSTHOG_KEY || typeof window === "undefined") return;
-  getClient()
-    .then((client) => client?.capture(event, properties))
-    .catch(() => {
-      /* analytics must never break the app */
-    });
+  if (!UMAMI_WEBSITE_ID || typeof window === "undefined") return;
+
+  fetch(`${UMAMI_HOST}/api/send`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      type: "event",
+      payload: {
+        website: UMAMI_WEBSITE_ID,
+        url: window.location.pathname,
+        hostname: window.location.hostname,
+        language: navigator.language,
+        screen: `${window.screen.width}x${window.screen.height}`,
+        title: document.title,
+        name: event,
+        data: properties,
+      },
+    }),
+  }).catch(() => {
+    /* analytics must never break the app */
+  });
 }
