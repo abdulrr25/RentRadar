@@ -101,7 +101,11 @@ export default function Home() {
               <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="currentColor">
                 <path d="M12 .5C5.7.5.5 5.7.5 12c0 5.1 3.3 9.4 7.9 10.9.6.1.8-.2.8-.6v-2c-3.2.7-3.9-1.4-3.9-1.4-.5-1.3-1.3-1.7-1.3-1.7-1.1-.7.1-.7.1-.7 1.2.1 1.8 1.2 1.8 1.2 1 1.8 2.7 1.3 3.4 1 .1-.8.4-1.3.7-1.6-2.6-.3-5.3-1.3-5.3-5.7 0-1.3.5-2.3 1.2-3.1-.1-.3-.5-1.5.1-3.1 0 0 1-.3 3.3 1.2a11.5 11.5 0 0 1 6 0C17.3 4.7 18.3 5 18.3 5c.6 1.6.2 2.8.1 3.1.8.8 1.2 1.8 1.2 3.1 0 4.4-2.7 5.4-5.3 5.7.4.4.8 1.1.8 2.2v3.3c0 .3.2.7.8.6 4.6-1.5 7.9-5.8 7.9-10.9C23.5 5.7 18.3.5 12 .5z" />
               </svg>
-              GitHub
+              <span className="hidden sm:inline">Star on GitHub</span>
+              <span className="sm:hidden">GitHub</span>
+              <svg viewBox="0 0 24 24" className="hidden sm:inline h-3 w-3 text-amber-400" fill="currentColor">
+                <path d="M12 2.5l2.9 6.6 7.1.6-5.4 4.7 1.7 7-6.3-3.8-6.3 3.8 1.7-7-5.4-4.7 7.1-.6z" />
+              </svg>
             </a>
           </nav>
         </div>
@@ -256,6 +260,17 @@ export default function Home() {
             <p>Data refreshed live on every search · Not affiliated with any listing portal</p>
             <a href="/terms" className="font-medium text-slate-500 underline-offset-2 hover:text-slate-700 hover:underline">
               Terms &amp; Conditions
+            </a>
+            <a
+              href="https://github.com/abdulrr25/RentRadar"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1 font-medium text-slate-500 hover:text-slate-700"
+            >
+              <svg viewBox="0 0 24 24" className="h-3 w-3 text-amber-400" fill="currentColor">
+                <path d="M12 2.5l2.9 6.6 7.1.6-5.4 4.7 1.7 7-6.3-3.8-6.3 3.8 1.7-7-5.4-4.7 7.1-.6z" />
+              </svg>
+              Like RentRadar? Give it a star on GitHub
             </a>
           </div>
         </div>
