@@ -35,6 +35,12 @@ yarn-debug.log*
 yarn-error.log*
 tsconfig.tsbuildinfo
 
+# Test artifacts
+test-results/
+playwright-report/
+blob-report/
+playwright/.cache/
+
 # Editor / tooling
 .claude/launch.json
 

@@ -1,36 +1,34 @@
 "use client";
 
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, useReducer } from "react";
 import SearchBar from "./components/SearchBar";
 import SourceIndicators from "./components/SourceIndicators";
 import RentRadarCard from "./components/RentRadarCard";
 import HowItWorks from "./components/HowItWorks";
 import FeedbackWidget from "./components/FeedbackWidget";
 import StatusBanner from "./components/StatusBanner";
-
-type SourceStatus = "idle" | "fetching" | "ok" | "error";
-const ALL_SOURCES = ["Reddit", "Google News", "Hacker News", "NoBroker", "OLX", "Housing.com"];
+import { searchReducer, initialSearchState, splitSSEBuffer, parseSSELine } from "../lib/searchReducer";
+import { track } from "../lib/analytics";
 
 export default function Home() {
-  const [loading, setLoading]         = useState(false);
-  const [sources, setSources]         = useState<string[]>([]);
-  const [statuses, setStatuses]       = useState<Record<string, SourceStatus>>({});
-  const [brief, setBrief]             = useState<string | null>(null);
-  const [error, setError]             = useState<string | null>(null);
-  const [parsedQuery, setParsedQuery] = useState<Record<string, any> | null>(null);
+  const [state, dispatch] = useReducer(searchReducer, initialSearchState);
+  const { loading, sources, statuses, brief, error, parsedQuery, shareId } = state;
   const [hasSearched, setHasSearched] = useState(false);
   const [lastQuery, setLastQuery]     = useState("");
-  const [shareId, setShareId]         = useState<string | null>(null);
   const abortRef                      = useRef<AbortController | null>(null);
 
   useEffect(() => { return () => { abortRef.current?.abort(); }; }, []);
 
+  useEffect(() => {
+    if (brief && !error) track("brief_rendered");
+  }, [brief, error]);
+
   const handleSearch = useCallback(async (query: string) => {
     abortRef.current?.abort();
     abortRef.current = new AbortController();
-    setLoading(true); setHasSearched(true); setLastQuery(query);
-    setBrief(null); setError(null); setParsedQuery(null); setShareId(null);
-    setSources([]); setStatuses({});
+    setHasSearched(true); setLastQuery(query);
+    dispatch({ type: "reset" });
+    track("search_submitted");
 
     try {
       const res = await fetch("/api/search", {
@@ -49,33 +47,17 @@ export default function Home() {
         const { done, value } = await reader.read();
         if (done) break;
         buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split("\n");
-        buffer = lines.pop() ?? "";
+        const { lines, remainder } = splitSSEBuffer(buffer);
+        buffer = remainder;
         for (const line of lines) {
-          if (!line.startsWith("data: ")) continue;
-          try {
-            const event = JSON.parse(line.slice(6));
-            switch (event.type) {
-              case "parsed": setParsedQuery(event.data); break;
-              case "fetching":
-                setSources(event.sources ?? ALL_SOURCES);
-                setStatuses(Object.fromEntries((event.sources ?? ALL_SOURCES).map((s: string) => [s, "fetching"])));
-                break;
-              case "source_complete":
-                setStatuses((prev) => ({ ...prev, [event.source]: event.status === "ok" ? "ok" : "error" }));
-                break;
-              case "brief":  setBrief(event.data); break;
-              case "share":  setShareId(event.id ?? null); break;
-              case "done":   setLoading(false); break;
-              case "error":  setError(event.message ?? "Something went wrong."); setLoading(false); break;
-            }
-          } catch { /* malformed SSE — ignore */ }
+          const event = parseSSELine(line);
+          if (event) dispatch(event);
         }
       }
     } catch (err: any) {
-      if (err?.name === "AbortError") setError(null);
-      else setError("Backend unreachable — please check the server is running and try again.");
-    } finally { setLoading(false); }
+      if (err?.name === "AbortError") dispatch({ type: "aborted" });
+      else dispatch({ type: "error", message: "Backend unreachable — please check the server is running and try again." });
+    } finally { dispatch({ type: "done" }); }
   }, []);
 
   return (
@@ -199,7 +181,7 @@ export default function Home() {
         {/* ── Error ─────────────────────────────────────────────────────── */}
         {error && (
           <section className="mx-auto mt-4 max-w-2xl px-4 sm:px-6">
-            <div className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">
+            <div role="alert" className="flex items-start gap-3 rounded-xl border border-red-200 bg-red-50 px-5 py-4 text-sm text-red-700">
               <svg className="mt-0.5 h-4 w-4 flex-shrink-0 text-red-500" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                 <circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" />
               </svg>
@@ -207,6 +189,19 @@ export default function Home() {
             </div>
           </section>
         )}
+
+        {/* Screen-reader status announcement — a dedicated, always-present
+            live region kept separate from the visually rendered results, so
+            assistive tech gets one concise announcement ("Results ready")
+            instead of the entire card being read out verbatim the moment it
+            mounts. Previously nothing here was announced at all: a
+            screen-reader user got silence while sources scanned, then no
+            signal when results landed — they'd have to manually re-explore
+            the page to discover anything happened. */}
+        <div role="status" aria-live="polite" className="sr-only">
+          {loading && "Scanning sources…"}
+          {!loading && brief && !error && "Results ready"}
+        </div>
 
         {/* ── Results ───────────────────────────────────────────────────── */}
         <section className="mx-auto max-w-2xl px-4 sm:px-6 pb-24">

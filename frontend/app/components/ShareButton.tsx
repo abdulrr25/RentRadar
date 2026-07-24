@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { track } from "../../lib/analytics";
 
 interface Props {
   shareId: string;
@@ -16,6 +17,7 @@ export default function ShareButton({ shareId, locality, bhk, maxRent }: Props) 
   const shareText = `${bhk} in ${locality} under ₹${maxRent.toLocaleString("en-IN")} — live rental brief on RentRadar`;
 
   const handleShare = async () => {
+    track("share_clicked", { method: "native_or_copy" });
     // Native share sheet on mobile — the one-tap path into WhatsApp groups.
     if (navigator.share) {
       try {
@@ -44,6 +46,7 @@ export default function ShareButton({ shareId, locality, bhk, maxRent }: Props) 
         href={waHref}
         target="_blank"
         rel="noopener noreferrer"
+        onClick={() => track("share_clicked", { method: "whatsapp" })}
         className="inline-flex items-center gap-1.5 rounded-lg border border-white/25 bg-white/10 px-3 py-1.5 text-xs font-semibold text-white backdrop-blur-sm transition hover:bg-white/20"
         title="Share on WhatsApp"
       >

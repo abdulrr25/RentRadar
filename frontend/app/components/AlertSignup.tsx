@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { track } from "../../lib/analytics";
 
 interface Props {
   locality: string;
@@ -157,7 +158,7 @@ export default function AlertSignup({ locality, bhk, maxRent }: Props) {
             {CHANNELS.map((c) => (
               <button
                 key={c.id}
-                onClick={() => { setChannel(c.id); setErrorMsg(null); setStatus("idle"); }}
+                onClick={() => { setChannel(c.id); setErrorMsg(null); setStatus("idle"); track("alert_channel_clicked", { channel: c.id }); }}
                 className={`flex-1 rounded-lg border py-2 text-sm font-medium transition ${
                   channel === c.id
                     ? "border-brand-400 bg-white text-brand-700"

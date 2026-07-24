@@ -110,7 +110,7 @@ RentRadar/
 
 ## Testing & CI
 
-Backend has a pytest suite (46 tests) covering the query parser, price extraction/context building, the saved-search alerts store, and every API endpoint (validation, rate limits, the webhook/internal-endpoint secret guards, a stubbed-agent happy path for `/search`):
+**Backend** — pytest suite (79 tests) covering the query parser, price extraction/context building, the saved-search alerts store, the query cache, source-health tracking, and every API endpoint (validation, rate limits, the webhook/internal-endpoint secret guards, a stubbed-agent happy path for `/search`):
 
 ```bash
 cd backend
@@ -118,7 +118,20 @@ pip install -r requirements-dev.txt
 pytest -v
 ```
 
-Tests run against an isolated DB file per test (via pytest's `tmp_path`) and a reset rate limiter, so run order never matters. [GitHub Actions](.github/workflows/ci.yml) runs this suite plus a frontend typecheck + production build on every push and PR to `master`.
+Tests run against an isolated DB file per test (via pytest's `tmp_path`) and reset every module-level global (rate limiter, query cache, source health) between tests, so run order never matters — each of those was a real bug caught during development, not a defensive habit.
+
+**Frontend** — two layers, matching what each is actually good at:
+
+```bash
+cd frontend
+npm test              # Vitest — unit tests for the SSE state machine (lib/searchReducer.ts)
+npm run build          # required before e2e — Playwright's webServer reuses this build
+npm run test:e2e       # Playwright — one real browser driving a real search end-to-end
+```
+
+The SSE event-parsing logic used to live entirely inline inside `page.tsx`'s fetch loop — the most fragile part of the app (malformed JSON, network chunks split mid-line, an abort mid-stream) with zero coverage. It's now a pure, extracted module (`lib/searchReducer.ts`) with 19 unit tests. The one Playwright spec (`e2e/search.spec.ts`) drives an actual browser through search → brief renders → share button appears, with the backend response mocked at the network boundary (`page.route`) — this tests real frontend rendering/interaction, not a re-test of the already extensively-tested backend, and never spends real Anakin/Groq credits.
+
+[GitHub Actions](.github/workflows/ci.yml) runs all of the above — backend pytest, frontend typecheck, Vitest, build, and Playwright — on every push and PR to `master`.
 
 ---
 
@@ -285,6 +298,8 @@ Worth knowing: adding the SDK to the frontend grew the shared JS bundle from ~87
 **Proactive status banner** — `backend/source_health.py` tracks whether the last real search had every data source fail (Anakin credits exhausted, network down, etc.) and `GET /health` reports it. The frontend polls this every 60s and shows a dismissible banner *before* anyone even searches, rather than only after they've typed a query and waited. Deliberately does not proactively ping Anakin to check status — that would cost real search credits just to answer "are we healthy," which would make the exact problem this exists to catch worse. This means a fresh restart assumes healthy until the first real search proves otherwise — a decision made for zero added cost, not an oversight.
 
 **Search caching** — `backend/query_cache.py` is a 15-minute in-memory cache keyed on normalized `(locality, bhk, max_rent)`. Two identical searches within that window mean the second one skips Anakin and Groq entirely and replays the first's result — verified live: a repeat search dropped from ~9.3s to ~0.17s with zero additional Anakin/Groq HTTP calls in the logs. Only genuinely successful briefs are ever cached — `sources_unavailable` and `synthesis_failed` results are never cached, since caching a failure would keep serving a stale outage message for the full 15 minutes even after Anakin recovers, directly undermining `source_health.py`'s recovery detection above.
+
+**Product analytics** — `frontend/lib/analytics.ts`, no-op until `NEXT_PUBLIC_POSTHOG_KEY` is set (PostHog — genuine permanent free tier, not a trial). Tracks `search_submitted`, `brief_rendered`, `alert_channel_clicked` (which of Telegram/Browser/Email gets picked), and `share_clicked` (native share sheet, clipboard copy, or the direct WhatsApp link, tracked separately). The `posthog-js` import is dynamic and only reached once a key is configured, so an unconfigured deployment never even fetches the analytics chunk — confirmed via build output, not assumed: the shared bundle size is identical with or without this code present.
 
 ---
 
