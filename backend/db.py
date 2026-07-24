@@ -56,10 +56,24 @@ CREATE INDEX IF NOT EXISTS idx_briefs_created_at ON briefs(created_at);
 _client: libsql_client.Client | None = None
 
 
+def _connect_url(url: str) -> str:
+    """
+    Turso's dashboard always hands out a libsql:// URL, which uses the
+    Hrana WebSocket transport. That transport's handshake failed outright
+    in testing (WSServerHandshakeError) — HTTP works reliably and this app
+    has no need for WebSocket-only features (streaming/interactive
+    transactions), so translate transparently rather than expecting every
+    caller to know to swap the scheme themselves.
+    """
+    if url.startswith("libsql://"):
+        return "https://" + url[len("libsql://"):]
+    return url
+
+
 async def init_db() -> None:
     global _client
     kwargs = {"auth_token": DATABASE_AUTH_TOKEN} if DATABASE_AUTH_TOKEN else {}
-    _client = libsql_client.create_client(DATABASE_URL, **kwargs)
+    _client = libsql_client.create_client(_connect_url(DATABASE_URL), **kwargs)
     statements = [s.strip() for s in SCHEMA.split(";") if s.strip()]
     await _client.batch(statements)
 
