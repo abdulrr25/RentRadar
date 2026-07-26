@@ -1,0 +1,27 @@
+name: Run saved-search alerts
+
+# Nothing was calling POST /internal/run-alerts — saved-search alerts (the
+# "notify me the moment a new match appears" feature) were being accepted
+# and confirmed, but never actually checked or sent. This is the scheduler
+# that was missing. Runs once daily to keep Anakin credit spend predictable
+# (3 credits per active saved search, per run).
+on:
+  schedule:
+    - cron: "23 2 * * *"  # ~08:00 IST daily
+  workflow_dispatch: {}    # allows a manual run from the Actions tab
+
+jobs:
+  run-alerts:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger alert check
+        run: |
+          status=$(curl -s -o response.json -w "%{http_code}" -X POST \
+            "${{ vars.BACKEND_API_URL }}/internal/run-alerts" \
+            -H "X-Internal-Secret: ${{ secrets.ALERTS_INTERNAL_SECRET }}")
+          echo "HTTP status: $status"
+          cat response.json
+          if [ "$status" -ge 300 ]; then
+            echo "::error::run-alerts request failed with status $status"
+            exit 1
+          fi

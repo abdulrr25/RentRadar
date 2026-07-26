@@ -19,34 +19,39 @@ import asyncio
 import json
 import logging
 import os
+from typing import Literal
 
 from pywebpush import webpush, WebPushException
 
 logger = logging.getLogger("rentradar.webpush")
+
+# "gone" means the push service confirmed this subscription no longer exists
+# (410/404) — browser subscriptions expire and can never be retried, so the
+# caller should deactivate the saved search rather than trying again next run.
+SendResult = Literal["sent", "failed", "gone"]
 
 
 def _vapid_claims() -> dict:
     return {"sub": os.getenv("VAPID_SUBJECT", "mailto:admin@example.com")}
 
 
-async def send_webpush(subscription_json: str, message: str) -> bool:
+async def send_webpush(subscription_json: str, message: str) -> SendResult:
     """
     Send a Web Push notification. `subscription_json` is the JSON-serialised
     PushSubscription object captured from the browser (endpoint + keys).
-    Returns False (and marks the caller should deactivate) if the push
-    service reports the subscription as gone (410/404) — browser
-    subscriptions expire and can't be retried.
+    Returns "gone" if the push service confirms the subscription no longer
+    exists (410/404) — the caller must deactivate it, not retry.
     """
     private_key = os.getenv("VAPID_PRIVATE_KEY")
     if not private_key:
         logger.info("[WEBPUSH STUB — no VAPID_PRIVATE_KEY set] message=%r", message)
-        return True
+        return "sent"
 
     try:
         subscription_info = json.loads(subscription_json)
     except (json.JSONDecodeError, TypeError):
         logger.error("Malformed push subscription JSON — cannot send")
-        return False
+        return "failed"
 
     def _send():
         webpush(
@@ -58,20 +63,20 @@ async def send_webpush(subscription_json: str, message: str) -> bool:
 
     try:
         await asyncio.to_thread(_send)
-        return True
+        return "sent"
     except WebPushException as e:
         status = getattr(e.response, "status_code", None)
         if status in (404, 410):
-            logger.info("Push subscription expired/gone — should be deactivated")
-        else:
-            logger.exception("Web push send failed")
-        return False
+            logger.info("Push subscription expired/gone — deactivating")
+            return "gone"
+        logger.exception("Web push send failed")
+        return "failed"
     except Exception:
         # A malformed subscription (bad base64 in p256dh/auth, missing
         # fields) raises from inside pywebpush's own parsing, not as a
         # WebPushException — never let a bad client payload crash the caller.
         logger.exception("Web push send failed with an unexpected error")
-        return False
+        return "failed"
 
 
 def _generate_and_print_vapid_keys() -> None:

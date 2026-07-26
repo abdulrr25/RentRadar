@@ -7,9 +7,9 @@ the portal scrapers directly and skips the Groq call entirely. That keeps
 alert runs cheap (Anakin search credits only, no LLM tokens) since this is
 meant to run unattended on a schedule across every saved search.
 
-Triggered by POST /internal/run-alerts (see main.py), which is meant to be
-called by a scheduler (e.g. a Render Cron Job) once one is wired up —
-nothing here runs on its own timer.
+Triggered by POST /internal/run-alerts (see main.py), called once daily by
+the "Run saved-search alerts" GitHub Actions workflow — nothing here runs
+on its own timer.
 """
 
 import asyncio
@@ -25,9 +25,11 @@ from channels.email import send_email
 
 logger = logging.getLogger("rentradar.alerts")
 
+# webpush is dispatched separately in run_all_alerts (below) — it has a
+# three-way "gone" result that needs to deactivate the saved search, unlike
+# telegram/email's plain success/fail.
 _SENDERS = {
     "telegram": lambda target, message: send_telegram(target, message),
-    "webpush": lambda target, message: send_webpush(target, message),
     "email": lambda target, message: send_email(target, "RentRadar: new match found", message),
 }
 
@@ -95,9 +97,27 @@ async def run_all_alerts() -> dict:
                     f"New {s['bhk']} match in {s['locality']} — "
                     f"₹{m['price']:,}/mo on {m['source']}. {m['url']}"
                 )
-                if await _dispatch(s["channel"], s["target"], message):
+
+                if s["channel"] == "webpush":
+                    result = await send_webpush(s["target"], message)
+                    if result == "gone":
+                        # Browser subscription expired — it can never succeed
+                        # again, so deactivate now rather than retrying this
+                        # (and every other match) forever on every future run.
+                        await alerts_store.deactivate(s["id"])
+                        logger.info(
+                            "Deactivated saved_search_id=%s — push subscription is gone", s["id"]
+                        )
+                        break
+                    delivered = result == "sent"
+                else:
+                    delivered = await _dispatch(s["channel"], s["target"], message)
+
+                if delivered:
                     sent += 1
-                await alerts_store.mark_seen(s["id"], ref)
+                    await alerts_store.mark_seen(s["id"], ref)
+                # else: leave unmarked so a transient send failure is retried
+                # next run instead of being silently and permanently dropped.
             await alerts_store.mark_checked(s["id"])
         except Exception:
             errors += 1
