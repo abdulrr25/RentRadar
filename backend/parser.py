@@ -36,6 +36,43 @@ BANGALORE_LOCALITIES = [
     "ITPL", "Bagmane Tech Park",
 ]
 
+# Words to strip when falling back to a raw locality extraction (below) —
+# BHK/rent phrasing and city names, not place names themselves.
+_FILLER_WORDS = {
+    "bhk", "flat", "flats", "apartment", "apartments", "house", "houses",
+    "room", "rooms", "for", "rent", "in", "near", "at", "around", "on",
+    "bangalore", "bengaluru", "blr", "a", "an", "the", "place", "looking",
+    "need", "want", "find", "search",
+}
+
+
+def _fix_case(word: str) -> str:
+    # Leave acronyms/already-capitalized input alone (e.g. "HAL", "ITPL");
+    # only capitalize words the user typed in lowercase.
+    return word if any(c.isupper() for c in word) else word.capitalize()
+
+
+def _extract_fallback_locality(query: str) -> "str | None":
+    """
+    Whatever real place name the user typed that isn't in our curated
+    BANGALORE_LOCALITIES list (small or less common areas — e.g. "Bagalur")
+    would otherwise be silently discarded, defaulting the search to
+    city-wide "Bangalore" and losing the user's actual intent entirely.
+    This pulls the leftover place-like words out of the query instead.
+    """
+    # Drop the rent clause — anything from the first rent-trigger word on.
+    cut = re.split(
+        r"\b(?:under|below|max|upto|up\s+to|₹|rs\.?)\b", query, maxsplit=1, flags=re.IGNORECASE
+    )[0]
+    # Drop the BHK token (e.g. "2BHK", "2 BHK")
+    cut = re.sub(r"\d+\s*bhk", " ", cut, flags=re.IGNORECASE)
+
+    words = re.findall(r"[A-Za-z]+", cut)
+    kept = [w for w in words if w.lower() not in _FILLER_WORDS]
+    if not kept:
+        return None
+    return " ".join(_fix_case(w) for w in kept)
+
 
 def parse_query(query: str) -> dict:
     """
@@ -67,6 +104,10 @@ def parse_query(query: str) -> dict:
             matched_len = len(loc)
     if matched_locality:
         result["locality"] = matched_locality
+    else:
+        fallback = _extract_fallback_locality(query)
+        if fallback:
+            result["locality"] = fallback
 
     # Extract max rent — handles ₹25000, Rs 25,000, under 25k, below 25000
     rent_match = re.search(
