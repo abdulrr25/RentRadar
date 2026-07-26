@@ -17,7 +17,7 @@ EMAIL_LIVE = bool(os.getenv("RESEND_API_KEY"))
 
 # Where operational alerts (e.g. Anakin credits exhausted) go — not a
 # user-facing channel, just the site owner's inbox.
-ADMIN_ALERT_EMAIL = os.getenv("ADMIN_ALERT_EMAIL", "abdulr3325@gmail.com")
+ADMIN_ALERT_EMAIL = os.getenv("ADMIN_ALERT_EMAIL", "abdulr6503@gmail.com")
 
 
 async def send_email(to: str, subject: str, body: str) -> bool:

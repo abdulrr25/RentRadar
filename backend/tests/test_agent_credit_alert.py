@@ -32,7 +32,7 @@ async def test_credit_exhausted_triggers_admin_alert(monkeypatch):
     # asyncio.create_task schedules the alert; let it run.
     await _drain_tasks()
 
-    assert "Anakin API credits exhausted" in sent["subject"]
+    assert sent["subject"] == "Urgent- RentRadar Credits expired"
     assert "recharge" in sent["body"].lower()
     assert source_health.get_status()["degraded"] is True
 

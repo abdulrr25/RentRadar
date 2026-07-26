@@ -125,7 +125,7 @@ async def synthesis_node(state: RentRadarState) -> RentRadarState:
         if is_new_outage:
             query_desc = f"{state['query'].get('bhk', '?')} in {state['query'].get('locality', 'Bangalore')}"
             if credit_exhausted:
-                subject = "RentRadar alert: Anakin API credits exhausted"
+                subject = "Urgent- RentRadar Credits expired"
                 body = (
                     f'A user just searched for "{query_desc}" and every live data source '
                     "(NoBroker, OLX, Housing.com, Reddit, Google News, Hacker News) failed "
