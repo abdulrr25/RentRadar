@@ -93,6 +93,27 @@ def test_unknown_multiword_locality_drops_trailing_city_name():
     assert r["locality"] == "Chikkajala"
 
 
+def test_misspelled_known_locality_resolves_to_canonical_name():
+    # Real user query — "kadubesanhalli" is close enough to the curated
+    # "Kadubeesanahalli" that it should resolve there, not be searched
+    # for exactly as misspelled.
+    r = parse_query("1 bhk in kadubesanhalli under 25k")
+    assert r["locality"] == "Kadubeesanahalli"
+    assert r["bhk"] == "1BHK"
+    assert r["max_rent"] == 25000
+
+
+def test_short_words_do_not_trigger_false_fuzzy_matches():
+    # Short filler-ish words shouldn't accidentally fuzzy-match a locality.
+    r = parse_query("2BHK near me under 20000")
+    assert r["locality"] != "" and r["locality"] is not None
+
+
+def test_clearly_unrelated_word_does_not_fuzzy_match():
+    r = parse_query("2BHK near Nelamangala under 20000")
+    assert r["locality"] == "Nelamangala"  # not fuzzy-matched to an unrelated known locality
+
+
 def test_no_locality_at_all_still_defaults_to_bangalore():
     r = parse_query("2BHK under 25000")
     assert r["locality"] == "Bangalore"

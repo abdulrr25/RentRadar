@@ -36,6 +36,19 @@ def _matches_domain(url: str, expected_domain: str) -> bool:
     return expected_domain in netloc
 
 
+def _is_generic_listing_page(url: str) -> bool:
+    """
+    True when a URL is a locality-wide search/category page, not one
+    specific property — seen live: NoBroker returning
+    ".../property/rent/bangalore/{area}?searchParam=<base64 location filter>"
+    URLs. That page just re-runs a location filter and shows whatever is
+    currently listed there; it's not "this listing", and showing it as if
+    it were one specific flat is the "fake/half information" a user hits
+    the exact moment the listing turns out not to be the flat described.
+    """
+    return "searchparam=" in url.lower()
+
+
 async def _search(prompt: str, source_name: str, expected_domain: str, limit: int = 6) -> dict:
     """
     Run an Anakin web search and return a list of structured results.
@@ -72,12 +85,15 @@ async def _search(prompt: str, source_name: str, expected_domain: str, limit: in
                 if r.get("snippet") and r.get("url")
             ]
 
-            results = [r for r in all_results if _matches_domain(r["url"], expected_domain)]
-            dropped = len(all_results) - len(results)
-            if dropped:
+            on_domain = [r for r in all_results if _matches_domain(r["url"], expected_domain)]
+            results = [r for r in on_domain if not _is_generic_listing_page(r["url"])]
+
+            dropped_domain = len(all_results) - len(on_domain)
+            dropped_generic = len(on_domain) - len(results)
+            if dropped_domain or dropped_generic:
                 logger.info(
-                    "%s: dropped %d/%d result(s) not actually on %s",
-                    source_name, dropped, len(all_results), expected_domain,
+                    "%s: dropped %d wrong-domain + %d generic-listing-page result(s) out of %d",
+                    source_name, dropped_domain, dropped_generic, len(all_results),
                 )
 
             if not results:

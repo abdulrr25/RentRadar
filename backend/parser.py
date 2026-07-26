@@ -3,6 +3,7 @@ Natural language query parser for Bangalore rental searches.
 Extracts BHK type, locality, and max rent from free-form text.
 """
 
+import difflib
 import re
 
 
@@ -67,6 +68,35 @@ def _fix_case(word: str) -> str:
     return word if any(c.isupper() for c in word) else word.capitalize()
 
 
+_LOCALITY_LOOKUP = {loc.lower(): loc for loc in BANGALORE_LOCALITIES}
+
+
+def _fuzzy_match_locality(query: str) -> "str | None":
+    """
+    Catch near-miss spellings of a known locality (e.g. "kadubesanhalli" for
+    "Kadubeesanahalli") before falling back to raw extraction — a slightly
+    misspelled but real, known place should still resolve to its canonical
+    name rather than being searched for exactly as typed.
+    """
+    words = re.findall(r"[a-z]+", query.lower())
+    candidates = set(words)
+    for i in range(len(words) - 1):
+        candidates.add(f"{words[i]} {words[i + 1]}")
+
+    best_match = None
+    best_ratio = 0.0
+    for cand in candidates:
+        if len(cand) < 5:
+            continue  # too short for a meaningful fuzzy match — avoid false hits
+        close = difflib.get_close_matches(cand, _LOCALITY_LOOKUP.keys(), n=1, cutoff=0.8)
+        if close:
+            ratio = difflib.SequenceMatcher(None, cand, close[0]).ratio()
+            if ratio > best_ratio:
+                best_ratio = ratio
+                best_match = _LOCALITY_LOOKUP[close[0]]
+    return best_match
+
+
 def _extract_fallback_locality(query: str) -> "str | None":
     """
     Whatever real place name the user typed that isn't in our curated
@@ -120,9 +150,13 @@ def parse_query(query: str) -> dict:
     if matched_locality:
         result["locality"] = matched_locality
     else:
-        fallback = _extract_fallback_locality(query)
-        if fallback:
-            result["locality"] = fallback
+        fuzzy = _fuzzy_match_locality(query)
+        if fuzzy:
+            result["locality"] = fuzzy
+        else:
+            fallback = _extract_fallback_locality(query)
+            if fallback:
+                result["locality"] = fallback
 
     # Extract max rent — handles ₹25000, Rs 25,000, under 25k, below 25000
     rent_match = re.search(
