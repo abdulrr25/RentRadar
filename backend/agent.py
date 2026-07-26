@@ -27,6 +27,7 @@ from groq import Groq
 from tools.holocron import fetch_reddit, fetch_google_news, fetch_hackernews
 from tools.scraper import fetch_nobroker, fetch_olx, fetch_housing
 from prompts import SYSTEM_PROMPT, build_context
+from channels.email import send_admin_alert
 import source_health
 
 
@@ -110,10 +111,38 @@ async def synthesis_node(state: RentRadarState) -> RentRadarState:
     if state["raw_data"] and all(
         item.get("status") != "ok" for item in state["raw_data"]
     ):
-        source_health.mark_degraded(
+        credit_exhausted = any(
+            isinstance(item, dict) and item.get("credit_exhausted")
+            for item in state["raw_data"]
+        )
+        is_new_outage = source_health.mark_degraded(
+            "Anakin credits exhausted" if credit_exhausted else
             "All live data sources failed on the last search — likely Anakin "
             "credits exhausted or a network issue."
         )
+        # Only page the admin on the moment of transition into an outage, not
+        # on every subsequent search while it's still down.
+        if is_new_outage:
+            query_desc = f"{state['query'].get('bhk', '?')} in {state['query'].get('locality', 'Bangalore')}"
+            if credit_exhausted:
+                subject = "RentRadar alert: Anakin API credits exhausted"
+                body = (
+                    f'A user just searched for "{query_desc}" and every live data source '
+                    "(NoBroker, OLX, Housing.com, Reddit, Google News, Hacker News) failed "
+                    "with an error indicating the Anakin API credits have run out.\n\n"
+                    "Action needed: recharge your Anakin account balance, or rotate "
+                    "ANAKIN_API_KEY if you've switched keys.\n\n"
+                    "Users will keep seeing a \"sources unavailable\" message until this is fixed."
+                )
+            else:
+                subject = "RentRadar alert: all live data sources are down"
+                body = (
+                    f'A user just searched for "{query_desc}" and every live data source failed.\n\n'
+                    "This could be Anakin credits running out or a network/API outage — check "
+                    "the Render logs for the exact error.\n\n"
+                    "Users will keep seeing a \"sources unavailable\" message until this is fixed."
+                )
+            asyncio.create_task(send_admin_alert(subject, body))
         return {
             **state,
             "brief": json.dumps({

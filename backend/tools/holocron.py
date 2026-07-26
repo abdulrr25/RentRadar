@@ -14,6 +14,8 @@ import time
 import httpx
 import os
 
+from tools.anakin_errors import is_credit_exhausted
+
 WIRE_BASE = "https://api.anakin.io/v1/wire"
 POLL_INTERVAL = 1.5   # seconds between polls
 POLL_TIMEOUT  = 25.0  # max seconds to wait for a job
@@ -68,8 +70,15 @@ async def wire_action(action_id: str, params: dict, source_name: str) -> dict:
             result = await _poll_job(client, job_id)
             return {"source": source_name, "status": "ok", "data": result}
 
+    except httpx.HTTPStatusError as e:
+        body = e.response.text if e.response is not None else ""
+        status = e.response.status_code if e.response is not None else None
+        return {
+            "source": source_name, "status": "error", "data": str(e),
+            "credit_exhausted": is_credit_exhausted(status, body),
+        }
     except Exception as e:
-        return {"source": source_name, "status": "error", "data": str(e)}
+        return {"source": source_name, "status": "error", "data": str(e), "credit_exhausted": False}
 
 
 async def fetch_reddit(locality: str, bhk: str) -> dict:

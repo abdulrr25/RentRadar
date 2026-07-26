@@ -15,11 +15,17 @@ import time
 _state = {"degraded": False, "reason": None, "since": None}
 
 
-def mark_degraded(reason: str) -> None:
-    if not _state["degraded"]:
+def mark_degraded(reason: str) -> bool:
+    """Returns True the moment sources go from healthy to degraded (a fresh
+    outage), False on every subsequent call while still degraded — callers
+    use this to fire one-time alerts instead of re-alerting on every request.
+    """
+    was_healthy = not _state["degraded"]
+    if was_healthy:
         _state["since"] = int(time.time())
     _state["degraded"] = True
     _state["reason"] = reason
+    return was_healthy
 
 
 def mark_healthy() -> None:

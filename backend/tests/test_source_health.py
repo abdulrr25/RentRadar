@@ -34,3 +34,18 @@ def test_mark_healthy_clears_state():
     source_health.mark_degraded("some failure")
     source_health.mark_healthy()
     assert source_health.get_status() == {"degraded": False, "reason": None, "since": None}
+
+
+def test_mark_degraded_returns_true_on_first_transition():
+    assert source_health.mark_degraded("first failure") is True
+
+
+def test_mark_degraded_returns_false_while_already_degraded():
+    source_health.mark_degraded("first failure")
+    assert source_health.mark_degraded("still failing") is False
+
+
+def test_mark_degraded_returns_true_again_after_recovering():
+    source_health.mark_degraded("first outage")
+    source_health.mark_healthy()
+    assert source_health.mark_degraded("second outage") is True

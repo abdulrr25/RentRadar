@@ -14,6 +14,8 @@ import httpx
 import os
 from urllib.parse import urlparse
 
+from tools.anakin_errors import is_credit_exhausted
+
 logger = logging.getLogger("rentradar.scraper")
 
 SEARCH_URL = "https://api.anakin.io/v1/search"
@@ -83,8 +85,16 @@ async def _search(prompt: str, source_name: str, expected_domain: str, limit: in
                         "error": "No results returned by search API"}
 
             return {"source": source_name, "status": "ok", "results": results}
+    except httpx.HTTPStatusError as e:
+        body = e.response.text if e.response is not None else ""
+        status = e.response.status_code if e.response is not None else None
+        return {
+            "source": source_name, "status": "error", "results": [], "error": str(e),
+            "credit_exhausted": is_credit_exhausted(status, body),
+        }
     except Exception as e:
-        return {"source": source_name, "status": "error", "results": [], "error": str(e)}
+        return {"source": source_name, "status": "error", "results": [], "error": str(e),
+                "credit_exhausted": False}
 
 
 async def fetch_nobroker(locality: str, bhk: str, max_rent: int) -> dict:
