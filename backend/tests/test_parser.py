@@ -5,7 +5,7 @@ def test_defaults_when_nothing_matches():
     r = parse_query("looking for a place")
     assert r["bhk"] == "2BHK"
     assert r["locality"] == "Bangalore"
-    assert r["max_rent"] == 30000
+    assert r["max_rent"] == 50000
 
 
 def test_extracts_bhk():
@@ -43,14 +43,14 @@ def test_malformed_rent_falls_back_to_default():
     # A pathological string that matches the rent regex prefix but not a
     # parseable number shouldn't crash parse_query or leave max_rent unset.
     r = parse_query("2BHK under ₹")
-    assert r["max_rent"] == 30000
+    assert r["max_rent"] == 50000
 
 
 def test_empty_query_does_not_crash():
     r = parse_query("")
     assert r["bhk"] == "2BHK"
     assert r["locality"] == "Bangalore"
-    assert r["max_rent"] == 30000
+    assert r["max_rent"] == 50000
 
 
 def test_raw_query_preserved():
@@ -58,22 +58,29 @@ def test_raw_query_preserved():
     assert parse_query(q)["raw_query"] == q
 
 
-def test_unknown_locality_falls_back_to_raw_place_name():
-    # "Bagalur" is a real Bangalore-area locality not in the curated list —
-    # it must not silently collapse to the generic "Bangalore" city default,
-    # which turns a targeted search into a city-wide one.
+def test_bagalur_is_recognized_directly():
+    # The exact locality a user complained wasn't being detected — now in
+    # the curated list so it resolves via the primary match, not fallback.
     r = parse_query("2BHK near Bagalur under 15000")
     assert r["locality"] == "Bagalur"
 
 
+def test_unknown_locality_falls_back_to_raw_place_name():
+    # "Nelamangala" is a real Bangalore-area town not in the curated list —
+    # it must not silently collapse to the generic "Bangalore" city default,
+    # which turns a targeted search into a city-wide one.
+    r = parse_query("2BHK near Nelamangala under 15000")
+    assert r["locality"] == "Nelamangala"
+
+
 def test_unknown_locality_without_near_keyword():
-    r = parse_query("1BHK Bagalur under 12000")
-    assert r["locality"] == "Bagalur"
+    r = parse_query("1BHK Nelamangala under 12000")
+    assert r["locality"] == "Nelamangala"
 
 
 def test_unknown_locality_lowercase_gets_capitalized():
-    r = parse_query("2bhk in bagalur under 20000")
-    assert r["locality"] == "Bagalur"
+    r = parse_query("2bhk in nelamangala under 20000")
+    assert r["locality"] == "Nelamangala"
 
 
 def test_unknown_locality_preserves_acronym_casing():

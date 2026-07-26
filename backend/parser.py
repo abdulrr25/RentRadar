@@ -11,26 +11,41 @@ BANGALORE_LOCALITIES = [
     "Whitefield", "Marathahalli", "Brookefield", "Kadugodi", "Kundalahalli",
     "Mahadevapura", "Kadubeesanahalli", "Panathur", "Varthur",
     "Devarabeesanahalli", "Kasavanahalli", "Halanayakanahalli",
+    "Hoodi", "Garudacharpalya", "Ramagondanahalli", "Seegehalli",
+    "Hopefarm", "Immadihalli", "KR Puram", "Krishnarajapuram", "Tin Factory",
+    "Channasandra", "Kadugodi Tree Park",
     # South / Outer Ring Road
     "Bellandur", "Sarjapur", "Haralur", "Bommanahalli", "Electronic City",
     "Bannerghatta", "Hulimavu", "Begur", "Neeladri Nagar",
+    "Bommasandra", "Chandapura", "Attibele", "Anekal", "Hongasandra",
+    "Arekere", "Gottigere", "Konanakunte", "Vasanthapura",
+    "Kumaraswamy Layout", "Yelachenahalli", "Jigani", "Hosur Road",
     # Central South
     "HSR Layout", "BTM Layout", "Koramangala", "Jayanagar", "JP Nagar",
     "Banashankari", "Padmanabhanagar", "Basavanagudi", "Girinagar",
-    "Wilson Garden", "Langford Town",
+    "Wilson Garden", "Langford Town", "Adugodi", "Suddaguntepalya",
     # Central / CBD
     "Indiranagar", "Domlur", "Madiwala", "Ejipura", "Vivek Nagar",
     "Richmond Town", "Shivajinagar", "MG Road", "UB City", "Lavelle Road",
+    "Cox Town", "Frazer Town", "Cooke Town", "Cunningham Road",
+    "Vasanth Nagar", "Sampangiramanagar", "Seshadripuram", "Gandhinagar",
+    "Majestic", "Chickpet",
     # North
     "Hebbal", "Yelahanka", "Thanisandra", "Nagawara", "Sahakara Nagar",
     "Devanahalli", "HBR Layout", "Kalyan Nagar", "RT Nagar",
-    "Banaswadi", "CV Raman Nagar", "Ramamurthy Nagar",
+    "Banaswadi", "CV Raman Nagar", "Ramamurthy Nagar", "Jakkur",
+    "Attur Layout", "Hennur", "Kammanahalli", "Kothanur", "Horamavu",
+    "Vidyaranyapura", "Yelahanka New Town", "Sanjaynagar", "Mathikere",
+    "Bagalur", "Bettahalsur",
     # West
     "Rajajinagar", "Vijayanagar", "Nagarbhavi", "Kengeri", "Uttarahalli",
     "Yeshwanthpur", "Malleshwaram", "Sadashivanagar", "Dollars Colony",
-    "RPC Layout", "Chord Road",
-    # North West
+    "RPC Layout", "Chord Road", "Basaveshwaranagar", "Kamakshipalya",
+    "Rajarajeshwari Nagar", "RR Nagar", "Nayandahalli", "Herohalli",
+    "Nagasandra", "Andrahalli",
+    # North West / Outskirts
     "Peenya", "Tumkur Road", "Hesaraghatta", "Jalahalli",
+    "Chikkabanavara", "Dasarahalli", "Doddaballapur",
     # Tech parks / micro-localities
     "Manyata Tech Park", "Embassy Tech Village", "Prestige Tech Park",
     "ITPL", "Bagmane Tech Park",
@@ -85,7 +100,7 @@ def parse_query(query: str) -> dict:
     result = {
         "bhk": "2BHK",
         "locality": "Bangalore",
-        "max_rent": 30000,
+        "max_rent": 50000,
         "city": "Bangalore",
         "raw_query": query,
     }
@@ -123,6 +138,6 @@ def parse_query(query: str) -> dict:
             else:
                 result["max_rent"] = int(raw)
         except ValueError:
-            pass  # keep default 30000
+            pass  # keep default 50000
 
     return result
