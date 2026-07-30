@@ -51,6 +51,14 @@ CREATE TABLE IF NOT EXISTS briefs (
     created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_briefs_created_at ON briefs(created_at);
+CREATE TABLE IF NOT EXISTS feedback (
+    id         TEXT PRIMARY KEY,
+    rating     TEXT NOT NULL,
+    message    TEXT NOT NULL DEFAULT '',
+    query      TEXT NOT NULL DEFAULT '',
+    created_at INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_feedback_created_at ON feedback(created_at);
 """
 
 _client: libsql_client.Client | None = None

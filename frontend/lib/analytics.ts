@@ -18,6 +18,44 @@
 const UMAMI_HOST = process.env.NEXT_PUBLIC_UMAMI_HOST ?? "https://cloud.umami.is";
 const UMAMI_WEBSITE_ID = process.env.NEXT_PUBLIC_UMAMI_WEBSITE_ID;
 
+/** Shared payload — Umami identifies the visitor from these + the request IP. */
+function basePayload() {
+  return {
+    website: UMAMI_WEBSITE_ID,
+    url: window.location.pathname,
+    hostname: window.location.hostname,
+    language: navigator.language,
+    screen: `${window.screen.width}x${window.screen.height}`,
+    title: document.title,
+    referrer: document.referrer,
+  };
+}
+
+function send(payload: Record<string, unknown>): void {
+  fetch(`${UMAMI_HOST}/api/send`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ type: "event", payload }),
+  }).catch(() => {
+    /* analytics must never break the app */
+  });
+}
+
+/**
+ * Record a page view.
+ *
+ * This is what actually produces visitor / session counts. Umami treats a
+ * payload WITHOUT a `name` as a pageview and one WITH a `name` as a custom
+ * event — so the custom events below can never answer "how many people
+ * reached the site", because every one of them requires the visitor to
+ * click something first. Anyone who lands and bounces would otherwise be
+ * counted as nobody at all.
+ */
+export function trackPageview(): void {
+  if (!UMAMI_WEBSITE_ID || typeof window === "undefined") return;
+  send(basePayload());
+}
+
 /**
  * Fire-and-forget event tracking. Safe to call unconditionally from any
  * component — it's a true no-op (not even a network request) when
@@ -25,24 +63,5 @@ const UMAMI_WEBSITE_ID = process.env.NEXT_PUBLIC_UMAMI_WEBSITE_ID;
  */
 export function track(event: string, properties?: Record<string, unknown>): void {
   if (!UMAMI_WEBSITE_ID || typeof window === "undefined") return;
-
-  fetch(`${UMAMI_HOST}/api/send`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      type: "event",
-      payload: {
-        website: UMAMI_WEBSITE_ID,
-        url: window.location.pathname,
-        hostname: window.location.hostname,
-        language: navigator.language,
-        screen: `${window.screen.width}x${window.screen.height}`,
-        title: document.title,
-        name: event,
-        data: properties,
-      },
-    }),
-  }).catch(() => {
-    /* analytics must never break the app */
-  });
+  send({ ...basePayload(), name: event, data: properties });
 }

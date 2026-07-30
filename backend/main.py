@@ -3,6 +3,7 @@ RentRadar FastAPI server.
 
 POST /search                  — accepts a natural language query, streams SSE events back.
 POST /feedback                 — accepts a user feedback rating + optional comment.
+GET  /internal/feedback         — read back collected feedback (secret-protected).
 POST /alerts                   — create a saved search on one of three channels
                                   (telegram / webpush / email); each has its own opt-in flow.
 POST /alerts/telegram/webhook   — inbound Telegram update; a "/start <token>" confirms.
@@ -18,7 +19,6 @@ import os
 import logging
 import re
 import secrets
-import time
 from contextlib import asynccontextmanager
 from typing import Literal
 
@@ -42,6 +42,7 @@ import db
 import alerts_store
 import source_health
 import briefs_store
+import feedback_store
 import query_cache
 from alert_worker import run_all_alerts
 from channels.telegram import send_telegram, bot_start_link
@@ -249,9 +250,6 @@ async def health():
     return {"status": "ok", "service": "RentRadar"}
 
 
-FEEDBACK_FILE = Path(__file__).parent / "feedback.jsonl"
-
-
 class FeedbackRequest(BaseModel):
     rating: str = Field(pattern="^(up|down)$")
     message: str = Field(default="", max_length=1000)
@@ -261,20 +259,37 @@ class FeedbackRequest(BaseModel):
 @app.post("/feedback")
 @limiter.limit("20/hour")
 async def feedback(request: Request, body: FeedbackRequest):
-    """Append feedback as a JSON line. Best-effort — never blocks the UI on failure."""
-    entry = {
-        "ts": int(time.time()),
-        "rating": body.rating,
-        "message": body.message.strip(),
-        "query": body.query.strip(),
-    }
+    """
+    Store feedback in the database. Was a local feedback.jsonl file, which
+    Render wipes on every redeploy — so anything submitted between deploys
+    was silently lost while the UI still said "Thanks for the feedback!".
+    """
     try:
-        with open(FEEDBACK_FILE, "a", encoding="utf-8") as f:
-            f.write(json.dumps(entry, ensure_ascii=False) + "\n")
+        await feedback_store.save_feedback(
+            body.rating, body.message.strip(), body.query.strip()
+        )
     except Exception:
         logger.exception("Failed to persist feedback")
         return {"status": "error"}
     return {"status": "ok"}
+
+
+@app.get("/internal/feedback")
+async def internal_list_feedback(x_internal_secret: str = Header(default="")):
+    """
+    Read back collected feedback. Behind the same shared secret as
+    /internal/run-alerts — this is user-submitted content, not public data.
+    """
+    secret = os.getenv("ALERTS_INTERNAL_SECRET")
+    if not secret:
+        raise HTTPException(status_code=503, detail="Internal endpoints not configured")
+    if x_internal_secret != secret:
+        raise HTTPException(status_code=403, detail="Forbidden")
+
+    return {
+        "counts": await feedback_store.counts(),
+        "recent": await feedback_store.list_feedback(),
+    }
 
 
 # ── Saved-search alerts ──────────────────────────────────────────────────────

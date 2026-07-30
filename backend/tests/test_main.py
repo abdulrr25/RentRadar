@@ -361,19 +361,44 @@ def test_internal_run_alerts_rejects_wrong_secret(client, monkeypatch):
 
 # ── /feedback ────────────────────────────────────────────────────────────────
 
-def test_feedback_success(client, tmp_path, monkeypatch):
-    feedback_file = tmp_path / "feedback.jsonl"
-    monkeypatch.setattr(main, "FEEDBACK_FILE", feedback_file)
+def test_feedback_success(client, monkeypatch):
+    monkeypatch.setenv("ALERTS_INTERNAL_SECRET", "s3cret")
 
     res = client.post("/feedback", json={"rating": "up", "message": "Loved it", "query": "2BHK Bellandur"})
     assert res.status_code == 200
     assert res.json()["status"] == "ok"
 
-    lines = feedback_file.read_text(encoding="utf-8").strip().split("\n")
-    assert len(lines) == 1
-    entry = json.loads(lines[0])
-    assert entry["rating"] == "up"
-    assert entry["message"] == "Loved it"
+    # Read it back out of the database — the whole point of this change is
+    # that it survives somewhere other than a wiped-on-deploy local file.
+    read = client.get("/internal/feedback", headers={"X-Internal-Secret": "s3cret"})
+    assert read.status_code == 200
+    body = read.json()
+    assert body["counts"] == {"up": 1, "down": 0}
+    assert body["recent"][0]["rating"] == "up"
+    assert body["recent"][0]["message"] == "Loved it"
+    assert body["recent"][0]["query"] == "2BHK Bellandur"
+
+
+def test_feedback_counts_tally_both_ratings(client, monkeypatch):
+    monkeypatch.setenv("ALERTS_INTERNAL_SECRET", "s3cret")
+    client.post("/feedback", json={"rating": "up"})
+    client.post("/feedback", json={"rating": "down"})
+    client.post("/feedback", json={"rating": "down"})
+
+    body = client.get("/internal/feedback", headers={"X-Internal-Secret": "s3cret"}).json()
+    assert body["counts"] == {"up": 1, "down": 2}
+
+
+def test_internal_feedback_requires_secret(client, monkeypatch):
+    monkeypatch.setenv("ALERTS_INTERNAL_SECRET", "s3cret")
+    res = client.get("/internal/feedback", headers={"X-Internal-Secret": "wrong"})
+    assert res.status_code == 403
+
+
+def test_internal_feedback_503_when_secret_unset(client, monkeypatch):
+    monkeypatch.delenv("ALERTS_INTERNAL_SECRET", raising=False)
+    res = client.get("/internal/feedback")
+    assert res.status_code == 503
 
 
 def test_feedback_rejects_invalid_rating(client):

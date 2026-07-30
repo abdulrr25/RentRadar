@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Inter, Sora } from "next/font/google";
 import "./globals.css";
+import PageviewTracker from "./components/PageviewTracker";
 
 const inter = Inter({
   subsets: ["latin"],
@@ -35,6 +36,7 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
   return (
     <html lang="en" className={`${inter.variable} ${sora.variable}`}>
       <body className="min-h-screen bg-[#f7f8fb] text-slate-900 font-sans antialiased selection:bg-indigo-100 selection:text-indigo-900">
+        <PageviewTracker />
         {children}
       </body>
     </html>
