@@ -9,6 +9,7 @@ import FeedbackWidget from "./components/FeedbackWidget";
 import StatusBanner from "./components/StatusBanner";
 import { searchReducer, initialSearchState, splitSSEBuffer, parseSSELine } from "../lib/searchReducer";
 import { track } from "../lib/analytics";
+import { classifyBackendError, shouldShowColdStartHint, COLD_START_HINT } from "../lib/backendErrors";
 
 export default function Home() {
   const [state, dispatch] = useReducer(searchReducer, initialSearchState);
@@ -22,6 +23,20 @@ export default function Home() {
   useEffect(() => {
     if (brief && !error) track("brief_rendered");
   }, [brief, error]);
+
+  // Cold-start feedback: the backend is on Render's free tier and sleeps
+  // when idle, so the first search after a quiet spell can sit silent for
+  // up to a minute. Without this the user just watches skeletons and
+  // assumes the product is broken.
+  const [elapsedMs, setElapsedMs] = useState(0);
+  useEffect(() => {
+    if (!loading) { setElapsedMs(0); return; }
+    const startedAt = Date.now();
+    const id = setInterval(() => setElapsedMs(Date.now() - startedAt), 1000);
+    return () => clearInterval(id);
+  }, [loading]);
+
+  const showColdStartHint = shouldShowColdStartHint(loading, sources.length, elapsedMs);
 
   const handleSearch = useCallback(async (query: string) => {
     abortRef.current?.abort();
@@ -56,7 +71,7 @@ export default function Home() {
       }
     } catch (err: any) {
       if (err?.name === "AbortError") dispatch({ type: "aborted" });
-      else dispatch({ type: "error", message: "Backend unreachable — please check the server is running and try again." });
+      else dispatch({ type: "error", message: classifyBackendError(err).message });
     } finally { dispatch({ type: "done" }); }
   }, []);
 
@@ -231,6 +246,16 @@ export default function Home() {
         {/* ── Results ───────────────────────────────────────────────────── */}
         <section className="mx-auto max-w-2xl px-4 sm:px-6 pb-24">
           {brief && <RentRadarCard rawBrief={brief} parsedQuery={parsedQuery} shareId={shareId} />}
+
+          {showColdStartHint && (
+            <div className="mt-6 flex items-start gap-3 rounded-xl border border-blue-200 bg-blue-50 px-5 py-4 text-sm text-blue-800 fade-in">
+              <svg className="mt-0.5 h-4 w-4 flex-shrink-0 animate-spin text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+                <path d="M21 12a9 9 0 1 1-6.22-8.56" />
+              </svg>
+              {COLD_START_HINT}
+            </div>
+          )}
+
           {loading && !brief && (
             <div className="mt-6 space-y-3">
               {[...Array(3)].map((_, i) => (

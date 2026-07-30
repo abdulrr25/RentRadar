@@ -6,6 +6,7 @@
  */
 
 import { NextRequest } from "next/server";
+import { classifyBackendError } from "../../../lib/backendErrors";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -17,14 +18,16 @@ export async function POST(req: NextRequest) {
   const apiUrl = process.env.BACKEND_API_URL ?? "http://localhost:8000";
 
   try {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 55_000); // 55 s — under Vercel's 60 s limit
+    // AbortSignal.timeout (not a manual AbortController) so the failure
+    // arrives as a TimeoutError rather than a generic AbortError — that's
+    // what lets classifyBackendError tell "server still waking up" apart
+    // from "something else broke". 55s keeps us under Vercel's 60s limit.
     const upstream = await fetch(`${apiUrl}/search`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(body),
-      signal: controller.signal,
-    }).finally(() => clearTimeout(timeout));
+      signal: AbortSignal.timeout(55_000),
+    });
 
     if (!upstream.body) {
       return new Response(
@@ -43,9 +46,14 @@ export async function POST(req: NextRequest) {
       },
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+    // Never surface the raw exception text ("fetch failed", "ECONNREFUSED")
+    // to the browser — it reads as a broken product when the usual cause is
+    // just a Render free-tier cold start. Log the real error, send a
+    // human-readable one.
+    console.error("[/api/search] upstream request failed:", err);
+    const { code, message } = classifyBackendError(err);
     return new Response(
-      `data: ${JSON.stringify({ type: "error", message: `Backend unreachable: ${message}` })}\n\n`,
+      `data: ${JSON.stringify({ type: "error", code, message })}\n\n`,
       {
         status: 200, // keep 200 so the SSE stream stays open for the error event
         headers: { "Content-Type": "text/event-stream" },
