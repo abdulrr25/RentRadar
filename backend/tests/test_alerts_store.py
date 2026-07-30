@@ -1,3 +1,5 @@
+import time
+
 import pytest
 import pytest_asyncio
 import db
@@ -128,3 +130,77 @@ async def test_mark_checked_does_not_affect_confirmed_state(fresh_db):
     await alerts_store.mark_checked(search_id)
     active = await alerts_store.list_active_confirmed()
     assert active[0]["id"] == search_id
+
+
+# ── seen_listings purge ──────────────────────────────────────────────────────
+
+async def _seen_count() -> int:
+    from db import get_conn
+    result = await get_conn().execute("SELECT count(*) FROM seen_listings")
+    return result.rows[0][0]
+
+
+@pytest.mark.asyncio
+async def test_purge_removes_rows_past_ttl(fresh_db):
+    from db import get_conn
+    search_id = await alerts_store.create_pending("webpush", '{"endpoint":"x"}', None, "Bellandur", "2BHK", 25000)
+    await alerts_store.confirm_by_id(search_id)
+    await alerts_store.mark_seen(search_id, "old-ref")
+
+    # Backdate past the TTL rather than waiting 90 days.
+    stale = int(time.time()) - alerts_store._SEEN_TTL_SECONDS - 60
+    await get_conn().execute(
+        "UPDATE seen_listings SET first_seen_at = ? WHERE ref_hash = 'old-ref'", (stale,)
+    )
+
+    removed = await alerts_store.purge_seen_listings()
+    assert removed == 1
+    assert await _seen_count() == 0
+
+
+@pytest.mark.asyncio
+async def test_purge_keeps_recent_rows_for_active_searches(fresh_db):
+    search_id = await alerts_store.create_pending("webpush", '{"endpoint":"x"}', None, "Bellandur", "2BHK", 25000)
+    await alerts_store.confirm_by_id(search_id)
+    await alerts_store.mark_seen(search_id, "fresh-ref")
+
+    removed = await alerts_store.purge_seen_listings()
+    assert removed == 0
+    # Still suppresses a duplicate notification — the whole point of the row.
+    assert await alerts_store.has_seen(search_id, "fresh-ref") is True
+
+
+@pytest.mark.asyncio
+async def test_purge_removes_rows_belonging_to_deactivated_searches(fresh_db):
+    search_id = await alerts_store.create_pending("webpush", '{"endpoint":"x"}', None, "Bellandur", "2BHK", 25000)
+    await alerts_store.confirm_by_id(search_id)
+    await alerts_store.mark_seen(search_id, "ref-1")
+    await alerts_store.mark_seen(search_id, "ref-2")
+
+    # Recent rows, but the search can never notify again — there is no
+    # reactivate path, so its dedup ledger is pure dead weight.
+    await alerts_store.deactivate(search_id)
+
+    removed = await alerts_store.purge_seen_listings()
+    assert removed == 2
+    assert await _seen_count() == 0
+
+
+@pytest.mark.asyncio
+async def test_purge_does_not_touch_other_active_searches(fresh_db):
+    dead = await alerts_store.create_pending("webpush", '{"endpoint":"a"}', None, "Bellandur", "2BHK", 25000)
+    live = await alerts_store.create_pending("webpush", '{"endpoint":"b"}', None, "Koramangala", "1BHK", 20000)
+    await alerts_store.confirm_by_id(dead)
+    await alerts_store.confirm_by_id(live)
+    await alerts_store.mark_seen(dead, "ref-dead")
+    await alerts_store.mark_seen(live, "ref-live")
+    await alerts_store.deactivate(dead)
+
+    removed = await alerts_store.purge_seen_listings()
+    assert removed == 1
+    assert await alerts_store.has_seen(live, "ref-live") is True
+
+
+@pytest.mark.asyncio
+async def test_purge_on_empty_table_is_a_noop(fresh_db):
+    assert await alerts_store.purge_seen_listings() == 0

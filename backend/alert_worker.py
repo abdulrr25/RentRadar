@@ -17,6 +17,7 @@ import hashlib
 import logging
 
 import alerts_store
+import briefs_store
 from prompts import extract_price_int
 from tools.scraper import fetch_nobroker, fetch_olx, fetch_housing
 from channels.telegram import send_telegram
@@ -123,4 +124,20 @@ async def run_all_alerts() -> dict:
             errors += 1
             logger.exception("Alert check failed for saved_search_id=%s", s["id"])
 
-    return {"checked": checked, "alerts_sent": sent, "errors": errors}
+    # Storage cleanup piggybacks on the daily run rather than needing its own
+    # schedule. Never let a cleanup failure fail the alert run itself — the
+    # notifications are the point, this is housekeeping.
+    purged_seen = purged_briefs = 0
+    try:
+        purged_seen = await alerts_store.purge_seen_listings()
+        purged_briefs = await briefs_store.purge_expired()
+    except Exception:
+        logger.exception("Storage cleanup failed (alerts themselves were unaffected)")
+
+    return {
+        "checked": checked,
+        "alerts_sent": sent,
+        "errors": errors,
+        "purged_seen_listings": purged_seen,
+        "purged_briefs": purged_briefs,
+    }

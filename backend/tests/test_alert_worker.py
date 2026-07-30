@@ -161,4 +161,34 @@ async def test_one_bad_search_does_not_stop_the_whole_run(fresh_db, monkeypatch)
 @pytest.mark.asyncio
 async def test_no_active_searches_returns_zeroed_summary(fresh_db):
     summary = await alert_worker.run_all_alerts()
-    assert summary == {"checked": 0, "alerts_sent": 0, "errors": 0}
+    assert summary == {
+        "checked": 0,
+        "alerts_sent": 0,
+        "errors": 0,
+        "purged_seen_listings": 0,
+        "purged_briefs": 0,
+    }
+
+
+@pytest.mark.asyncio
+async def test_run_purges_seen_listings_of_deactivated_searches(fresh_db):
+    search_id = await _make_confirmed_webpush()
+    await alerts_store.mark_seen(search_id, "deadbeef")
+    await alerts_store.deactivate(search_id)
+
+    summary = await alert_worker.run_all_alerts()
+
+    assert summary["purged_seen_listings"] == 1
+
+
+@pytest.mark.asyncio
+async def test_cleanup_failure_does_not_fail_the_alert_run(fresh_db, monkeypatch):
+    async def boom():
+        raise RuntimeError("turso unavailable")
+
+    monkeypatch.setattr(alerts_store, "purge_seen_listings", boom)
+
+    # Should still return a normal summary rather than propagating.
+    summary = await alert_worker.run_all_alerts()
+    assert summary["checked"] == 0
+    assert summary["purged_seen_listings"] == 0

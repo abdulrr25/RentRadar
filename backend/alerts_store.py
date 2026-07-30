@@ -8,6 +8,13 @@ import uuid
 
 from db import get_conn
 
+# How long a "we already told them about this listing" record is kept.
+# It exists purely to suppress duplicate notifications, and rental listings
+# go stale fast — if the same URL resurfaces after this long it's a fresh
+# listing in practice, and notifying again is the right behaviour.
+SEEN_TTL_DAYS = 90
+_SEEN_TTL_SECONDS = SEEN_TTL_DAYS * 24 * 3600
+
 
 async def create_pending(channel: str, target: str | None, confirm_token: str | None,
                           locality: str, bhk: str, max_rent: int) -> str:
@@ -117,3 +124,30 @@ async def mark_seen(search_id: str, ref_hash: str) -> None:
            VALUES (?, ?, ?)""",
         (search_id, ref_hash, int(time.time())),
     )
+
+
+async def purge_seen_listings() -> int:
+    """
+    Delete dedup rows that can no longer suppress a real notification.
+
+    This table only ever got INSERTs — nothing deleted from it, ever. The
+    ON DELETE CASCADE in the schema never fires either, because deactivate()
+    flags a search inactive rather than deleting the row, so a cancelled
+    subscription kept its entire dedup ledger forever.
+
+    Two classes of dead row:
+      - anything past SEEN_TTL_DAYS
+      - everything belonging to an inactive search (there is no reactivate
+        path, so those can never notify again)
+
+    Returns the number of rows removed.
+    """
+    conn = get_conn()
+    cutoff = int(time.time()) - _SEEN_TTL_SECONDS
+    result = await conn.execute(
+        """DELETE FROM seen_listings
+           WHERE first_seen_at < ?
+              OR saved_search_id IN (SELECT id FROM saved_searches WHERE active = 0)""",
+        (cutoff,),
+    )
+    return result.rows_affected

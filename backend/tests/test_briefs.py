@@ -67,6 +67,30 @@ async def test_expired_brief_not_returned_and_swept(fresh_db):
     assert not result.rows
 
 
+@pytest.mark.asyncio
+async def test_purge_expired_removes_aged_briefs_without_a_save(fresh_db):
+    brief_id = await briefs_store.save_brief("Bellandur", "2BHK", 25000, "{}")
+    conn = db.get_conn()
+    await conn.execute(
+        "UPDATE briefs SET created_at = ? WHERE id = ?",
+        (int(time.time()) - briefs_store._TTL_SECONDS - 60, brief_id),
+    )
+
+    # The inline sweep only runs on save, so during a quiet stretch aged rows
+    # linger. This is the traffic-independent path used by the daily job.
+    removed = await briefs_store.purge_expired()
+    assert removed == 1
+    result = await conn.execute("SELECT 1 FROM briefs WHERE id = ?", (brief_id,))
+    assert not result.rows
+
+
+@pytest.mark.asyncio
+async def test_purge_expired_keeps_fresh_briefs(fresh_db):
+    brief_id = await briefs_store.save_brief("Bellandur", "2BHK", 25000, "{}")
+    assert await briefs_store.purge_expired() == 0
+    assert await briefs_store.get_brief(brief_id) is not None
+
+
 # ── GET /brief/{id} endpoint ─────────────────────────────────────────────────
 
 def test_brief_endpoint_404_for_unknown_id(client):

@@ -26,9 +26,28 @@ async def save_brief(locality: str, bhk: str, max_rent: int, brief_json: str) ->
            VALUES (?, ?, ?, ?, ?, ?)""",
         (brief_id, locality, bhk, max_rent, brief_json, now),
     )
-    # Inline TTL sweep — cheap (indexed on created_at) and avoids a cron.
+    # Inline TTL sweep — cheap (indexed on created_at).
     await conn.execute("DELETE FROM briefs WHERE created_at < ?", (now - _TTL_SECONDS,))
     return brief_id
+
+
+async def purge_expired() -> int:
+    """
+    Delete briefs past their TTL, independent of a save.
+
+    save_brief() sweeps inline, but that only runs when someone searches —
+    so during a quiet stretch expired briefs sit in storage indefinitely.
+    They're never *served* (get_brief filters on created_at), so this is a
+    storage concern rather than a correctness one. Called from the daily
+    alerts job so cleanup no longer depends on traffic arriving.
+
+    Returns the number of rows removed.
+    """
+    conn = get_conn()
+    result = await conn.execute(
+        "DELETE FROM briefs WHERE created_at < ?", (int(time.time()) - _TTL_SECONDS,)
+    )
+    return result.rows_affected
 
 
 async def get_brief(brief_id: str) -> dict | None:
