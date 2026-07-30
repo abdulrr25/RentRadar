@@ -22,7 +22,11 @@ const UMAMI_WEBSITE_ID = process.env.NEXT_PUBLIC_UMAMI_WEBSITE_ID;
 function basePayload() {
   return {
     website: UMAMI_WEBSITE_ID,
-    url: window.location.pathname,
+    // pathname + search, not pathname alone: campaign tags (?utm_source=...)
+    // live in the query string, and dropping it makes it impossible to tell
+    // which channel a visitor came from. Nothing sensitive is ever put in a
+    // URL here — searches are POSTed, not query-encoded.
+    url: window.location.pathname + window.location.search,
     hostname: window.location.hostname,
     language: navigator.language,
     screen: `${window.screen.width}x${window.screen.height}`,

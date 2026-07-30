@@ -45,6 +45,20 @@ describe("trackPageview", () => {
     expect(body.payload).not.toHaveProperty("name");
   });
 
+  it("keeps the query string so campaign tags are attributable", async () => {
+    window.history.replaceState({}, "", "/?utm_source=facebook&utm_campaign=bangalore-groups");
+    const f = mockFetch();
+    const { trackPageview } = await loadAnalytics("site-abc");
+
+    trackPageview();
+
+    const body = JSON.parse((f.mock.calls[0][1] as RequestInit).body as string);
+    // Sending pathname alone would silently drop this, making it impossible
+    // to tell which channel a visitor arrived from.
+    expect(body.payload.url).toContain("utm_source=facebook");
+    window.history.replaceState({}, "", "/");
+  });
+
   it("includes referrer so traffic sources are attributable", async () => {
     const f = mockFetch();
     const { trackPageview } = await loadAnalytics("site-abc");
