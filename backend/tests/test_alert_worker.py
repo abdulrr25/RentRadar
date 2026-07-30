@@ -166,6 +166,7 @@ async def test_no_active_searches_returns_zeroed_summary(fresh_db):
         "alerts_sent": 0,
         "errors": 0,
         "purged_seen_listings": 0,
+        "purged_unconfirmed": 0,
         "purged_briefs": 0,
     }
 

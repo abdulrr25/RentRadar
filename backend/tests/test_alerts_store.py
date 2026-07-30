@@ -204,3 +204,62 @@ async def test_purge_does_not_touch_other_active_searches(fresh_db):
 @pytest.mark.asyncio
 async def test_purge_on_empty_table_is_a_noop(fresh_db):
     assert await alerts_store.purge_seen_listings() == 0
+
+
+# ── unconfirmed signup expiry ────────────────────────────────────────────────
+
+async def _backdate_creation(search_id: str, seconds_ago: int) -> None:
+    from db import get_conn
+    await get_conn().execute(
+        "UPDATE saved_searches SET created_at = ? WHERE id = ?",
+        (int(time.time()) - seconds_ago, search_id),
+    )
+
+
+@pytest.mark.asyncio
+async def test_expired_confirm_token_is_rejected(fresh_db):
+    search_id = await alerts_store.create_pending("telegram", None, "tok-old", "Bellandur", "2BHK", 25000)
+    await _backdate_creation(search_id, alerts_store._UNCONFIRMED_TTL_SECONDS + 60)
+
+    # Must fail at use time, not merely once a cleanup job happens to run —
+    # a confirm token is a bearer credential.
+    assert await alerts_store.confirm_by_token("tok-old", target="chat-1") is None
+
+
+@pytest.mark.asyncio
+async def test_fresh_confirm_token_still_works(fresh_db):
+    search_id = await alerts_store.create_pending("telegram", None, "tok-new", "Bellandur", "2BHK", 25000)
+    assert await alerts_store.confirm_by_token("tok-new", target="chat-1") == search_id
+
+
+@pytest.mark.asyncio
+async def test_token_just_inside_the_window_still_works(fresh_db):
+    search_id = await alerts_store.create_pending("email", "a@b.com", "tok-edge", "Bellandur", "2BHK", 25000)
+    await _backdate_creation(search_id, alerts_store._UNCONFIRMED_TTL_SECONDS - 120)
+    assert await alerts_store.confirm_by_token("tok-edge") == search_id
+
+
+@pytest.mark.asyncio
+async def test_purge_unconfirmed_removes_abandoned_signups(fresh_db):
+    abandoned = await alerts_store.create_pending("email", "a@b.com", "tok-1", "Bellandur", "2BHK", 25000)
+    await _backdate_creation(abandoned, alerts_store._UNCONFIRMED_TTL_SECONDS + 60)
+
+    assert await alerts_store.purge_unconfirmed() == 1
+
+
+@pytest.mark.asyncio
+async def test_purge_unconfirmed_keeps_recent_pending_signups(fresh_db):
+    await alerts_store.create_pending("email", "a@b.com", "tok-2", "Bellandur", "2BHK", 25000)
+    assert await alerts_store.purge_unconfirmed() == 0
+
+
+@pytest.mark.asyncio
+async def test_purge_unconfirmed_never_touches_confirmed_searches(fresh_db):
+    search_id = await alerts_store.create_pending("webpush", '{"endpoint":"x"}', None, "Bellandur", "2BHK", 25000)
+    await alerts_store.confirm_by_id(search_id)
+    # Old, but confirmed — this is a live subscription and must survive.
+    await _backdate_creation(search_id, alerts_store._UNCONFIRMED_TTL_SECONDS * 10)
+
+    assert await alerts_store.purge_unconfirmed() == 0
+    active = await alerts_store.list_active_confirmed()
+    assert any(s["id"] == search_id for s in active)

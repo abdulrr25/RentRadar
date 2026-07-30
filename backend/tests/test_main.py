@@ -60,6 +60,32 @@ def test_health_degraded_when_sources_failing(client, monkeypatch):
     assert res.json()["since"] is not None
 
 
+def test_health_unknown_on_a_fresh_instance(client, monkeypatch):
+    monkeypatch.setenv("ANAKIN_API_KEY", "x")
+    monkeypatch.setenv("GROQ_API_KEY", "y")
+    # Just-restarted state: no search has reported in yet. Answering "ok"
+    # here would let a monitor read a new instance as fine while Anakin is
+    # down — the failure mode this three-valued status exists to prevent.
+    source_health.reset()
+    res = client.get("/health")
+    assert res.status_code == 200
+    assert res.json()["status"] == "unknown"
+    assert res.json()["last_result_at"] is None
+
+
+def test_health_always_returns_200_even_when_degraded(client, monkeypatch):
+    # render.yaml uses healthCheckPath: /health, and Render restarts an
+    # instance returning non-2xx. Signalling a third-party outage with a 5xx
+    # would take the service down over something a restart cannot fix.
+    monkeypatch.setenv("ANAKIN_API_KEY", "x")
+    monkeypatch.setenv("GROQ_API_KEY", "y")
+    source_health.mark_degraded("Anakin credits exhausted")
+    assert client.get("/health").status_code == 200
+
+    monkeypatch.delenv("ANAKIN_API_KEY", raising=False)
+    assert client.get("/health").status_code == 200
+
+
 def test_health_recovers_after_mark_healthy(client, monkeypatch):
     monkeypatch.setenv("ANAKIN_API_KEY", "x")
     monkeypatch.setenv("GROQ_API_KEY", "y")

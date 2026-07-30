@@ -15,6 +15,13 @@ from db import get_conn
 SEEN_TTL_DAYS = 90
 _SEEN_TTL_SECONDS = SEEN_TTL_DAYS * 24 * 3600
 
+# How long an unclicked confirmation link stays valid. Kept short on purpose:
+# a confirm token is a bearer credential — anyone holding the link can attach
+# a Telegram chat or activate an email subscription — so one that never
+# expires is a standing liability in an old inbox or chat history.
+UNCONFIRMED_TTL_HOURS = 48
+_UNCONFIRMED_TTL_SECONDS = UNCONFIRMED_TTL_HOURS * 3600
+
 
 async def create_pending(channel: str, target: str | None, confirm_token: str | None,
                           locality: str, bhk: str, max_rent: int) -> str:
@@ -56,13 +63,19 @@ async def confirm_by_token(confirm_token: str, target: str | None = None) -> str
     Confirm the saved search matching this token. If `target` is given (the
     telegram webhook case, where the chat id wasn't known at creation time),
     it's written in along with confirmation. Returns the search id, or None
-    if no active, unconfirmed row has this token.
+    if no active, unconfirmed, unexpired row has this token.
+
+    The age check lives here rather than relying on purge_unconfirmed() to
+    have swept the row — expiry is a security property, so it must hold the
+    moment the link is used, not merely by the next time a cleanup job runs.
     """
     conn = get_conn()
+    cutoff = int(time.time()) - _UNCONFIRMED_TTL_SECONDS
     result = await conn.execute(
         """SELECT id FROM saved_searches
-           WHERE confirm_token = ? AND confirmed = 0 AND active = 1""",
-        (confirm_token,),
+           WHERE confirm_token = ? AND confirmed = 0 AND active = 1
+             AND created_at >= ?""",
+        (confirm_token, cutoff),
     )
     if not result.rows:
         return None
@@ -124,6 +137,28 @@ async def mark_seen(search_id: str, ref_hash: str) -> None:
            VALUES (?, ?, ?)""",
         (search_id, ref_hash, int(time.time())),
     )
+
+
+async def purge_unconfirmed() -> int:
+    """
+    Delete signups whose confirmation link was never used and has now expired.
+
+    Someone who starts a Telegram or email signup and never completes it
+    leaves a confirmed=0 row behind. Nothing removed those, so they
+    accumulated indefinitely — each still holding an (indexed) confirm_token.
+    confirm_by_token() already refuses them once expired, so deleting them
+    changes no behaviour; it just stops dead rows and stale bearer tokens
+    from being retained forever.
+
+    Returns the number of rows removed.
+    """
+    conn = get_conn()
+    cutoff = int(time.time()) - _UNCONFIRMED_TTL_SECONDS
+    result = await conn.execute(
+        "DELETE FROM saved_searches WHERE confirmed = 0 AND created_at < ?",
+        (cutoff,),
+    )
+    return result.rows_affected
 
 
 async def purge_seen_listings() -> int:

@@ -127,9 +127,10 @@ async def run_all_alerts() -> dict:
     # Storage cleanup piggybacks on the daily run rather than needing its own
     # schedule. Never let a cleanup failure fail the alert run itself — the
     # notifications are the point, this is housekeeping.
-    purged_seen = purged_briefs = 0
+    purged_seen = purged_briefs = purged_unconfirmed = 0
     try:
         purged_seen = await alerts_store.purge_seen_listings()
+        purged_unconfirmed = await alerts_store.purge_unconfirmed()
         purged_briefs = await briefs_store.purge_expired()
     except Exception:
         logger.exception("Storage cleanup failed (alerts themselves were unaffected)")
@@ -139,5 +140,6 @@ async def run_all_alerts() -> dict:
         "alerts_sent": sent,
         "errors": errors,
         "purged_seen_listings": purged_seen,
+        "purged_unconfirmed": purged_unconfirmed,
         "purged_briefs": purged_briefs,
     }

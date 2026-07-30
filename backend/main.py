@@ -239,15 +239,37 @@ async def get_shared_brief(request: Request, brief_id: str):
 
 @app.get("/health")
 async def health():
+    """
+    Liveness + source-health report.
+
+    Always answers HTTP 200, whatever the body says. render.yaml points
+    healthCheckPath here, and Render restarts an instance that returns
+    non-2xx — so signalling "Anakin is down" with a 5xx would take the whole
+    service offline over a third-party outage it cannot fix by restarting.
+    The status lives in the body; the status code only means "the process is
+    up and answering".
+
+    status is "ok" | "degraded" | "unknown". "unknown" means no search has
+    reported in recently (fresh restart or a quiet stretch), so there is no
+    evidence either way — reporting "ok" there would be a guess presented as
+    a fact, and would let a monitor miss a real outage on a new instance.
+    """
     missing = [k for k in ("ANAKIN_API_KEY", "GROQ_API_KEY") if not os.getenv(k)]
     if missing:
-        return {"status": "degraded", "missing_env": missing}
+        return {"status": "degraded", "reason": "Required configuration is missing", "missing_env": missing}
 
     source_status = source_health.get_status()
-    if source_status["degraded"]:
-        return {"status": "degraded", "reason": source_status["reason"], "since": source_status["since"]}
-
-    return {"status": "ok", "service": "RentRadar"}
+    body = {
+        "status": source_status["status"],
+        "service": "RentRadar",
+        "last_result_at": source_status["last_result_at"],
+    }
+    if source_status["status"] == "degraded":
+        body["reason"] = source_status["reason"]
+        body["since"] = source_status["since"]
+    elif source_status["status"] == "unknown":
+        body["reason"] = "No search has completed recently — source health has not been verified."
+    return body
 
 
 class FeedbackRequest(BaseModel):
