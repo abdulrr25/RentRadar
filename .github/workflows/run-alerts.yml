@@ -13,15 +13,87 @@ on:
 jobs:
   run-alerts:
     runs-on: ubuntu-latest
+    env:
+      # Passed as env vars rather than interpolated straight into the shell
+      # script: keeps the secret off the command line, and avoids a shell
+      # injection if a value ever contains metacharacters.
+      BACKEND_API_URL: ${{ vars.BACKEND_API_URL }}
+      ALERTS_INTERNAL_SECRET: ${{ secrets.ALERTS_INTERNAL_SECRET }}
+
     steps:
-      - name: Trigger alert check
+      # Without this, an unset BACKEND_API_URL produced the URL
+      # "/internal/run-alerts", which curl rejects as malformed — surfacing
+      # only as a bare "exit code 3" with no indication of what was wrong.
+      - name: Check configuration
         run: |
-          status=$(curl -s -o response.json -w "%{http_code}" -X POST \
-            "${{ vars.BACKEND_API_URL }}/internal/run-alerts" \
-            -H "X-Internal-Secret: ${{ secrets.ALERTS_INTERNAL_SECRET }}")
-          echo "HTTP status: $status"
-          cat response.json
-          if [ "$status" -ge 300 ]; then
-            echo "::error::run-alerts request failed with status $status"
+          missing=0
+          if [ -z "$BACKEND_API_URL" ]; then
+            echo "MISSING: repository VARIABLE 'BACKEND_API_URL'"
+            echo "         e.g. https://rentradar-vb7r.onrender.com (no trailing slash)"
+            missing=1
+          fi
+          if [ -z "$ALERTS_INTERNAL_SECRET" ]; then
+            echo "MISSING: repository SECRET 'ALERTS_INTERNAL_SECRET'"
+            echo "         must match the ALERTS_INTERNAL_SECRET set on Render"
+            missing=1
+          fi
+          if [ "$missing" -eq 1 ]; then
+            echo ""
+            echo "Both live under: Settings > Secrets and variables > Actions"
+            echo "They are on SEPARATE TABS of that page — a value added to the"
+            echo "wrong tab reads back as empty here:"
+            echo "  'Variables' tab -> BACKEND_API_URL"
+            echo "  'Secrets' tab   -> ALERTS_INTERNAL_SECRET"
+            echo "::error::Missing configuration — see the log above for what to set."
             exit 1
           fi
+          echo "Configuration present. Target: $BACKEND_API_URL"
+
+      # /health costs no Anakin credits, so a wrong URL is caught for free
+      # instead of by a failed alert run. Doubles as a warm-up: Render's free
+      # tier sleeps when idle, and this stops the real call below racing a
+      # cold start.
+      - name: Preflight — backend reachable
+        run: |
+          for attempt in 1 2 3; do
+            status=$(curl -s -o health.json -w "%{http_code}" --max-time 90 "$BACKEND_API_URL/health" || echo "000")
+            if [ "$status" = "200" ]; then
+              echo "Backend reachable. /health says:"
+              cat health.json; echo
+              exit 0
+            fi
+            echo "Attempt $attempt: HTTP $status — backend may be cold starting, retrying in 20s..."
+            sleep 20
+          done
+          echo "::error::Could not reach $BACKEND_API_URL/health after 3 attempts. Check the BACKEND_API_URL variable."
+          exit 1
+
+      - name: Trigger alert check
+        run: |
+          status=$(curl -s -o response.json -w "%{http_code}" --max-time 300 -X POST \
+            "$BACKEND_API_URL/internal/run-alerts" \
+            -H "X-Internal-Secret: $ALERTS_INTERNAL_SECRET" || echo "000")
+          echo "HTTP status: $status"
+          cat response.json 2>/dev/null || true
+          echo
+          case "$status" in
+            200)
+              echo "Alert run completed."
+              ;;
+            403)
+              echo "::error::403 Forbidden — ALERTS_INTERNAL_SECRET here does not match the value set on Render."
+              exit 1
+              ;;
+            503)
+              echo "::error::503 — ALERTS_INTERNAL_SECRET is not set on the RENDER side (backend env var), so the endpoint is disabled."
+              exit 1
+              ;;
+            000)
+              echo "::error::Request failed outright (timeout or connection error) against $BACKEND_API_URL."
+              exit 1
+              ;;
+            *)
+              echo "::error::Unexpected HTTP $status from /internal/run-alerts."
+              exit 1
+              ;;
+          esac
