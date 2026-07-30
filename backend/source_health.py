@@ -21,7 +21,38 @@ import time
 # we don't know that anything is broken, but we no longer know it isn't.
 FRESH_FOR_SECONDS = 3600
 
-_state = {"degraded": False, "reason": None, "since": None, "last_result_at": None}
+_state = {
+    "degraded": False,
+    "reason": None,
+    "since": None,
+    "last_result_at": None,
+    "credit_exhausted": False,
+}
+
+
+def mark_credit_exhausted() -> bool:
+    """
+    Record that at least one Anakin API reported exhausted credits.
+
+    Tracked separately from `degraded` on purpose: credit exhaustion can be
+    partial. Anakin exposes two APIs (search for listings, wire for
+    Reddit/HN/news) and if those bill from separate pools, one can run dry
+    while the other keeps working — results quietly get worse without a
+    total outage. That still needs to page the owner (it costs money to
+    fix), but it does not warrant telling users the site is broken while
+    listings are still coming back.
+
+    Returns True only on the transition into exhaustion, so callers page
+    once rather than on every subsequent search.
+    """
+    was_clear = not _state["credit_exhausted"]
+    _state["credit_exhausted"] = True
+    return was_clear
+
+
+def clear_credit_exhausted() -> None:
+    """Called after a search where no source reported a credit problem."""
+    _state["credit_exhausted"] = False
 
 
 def mark_degraded(reason: str) -> bool:
@@ -51,6 +82,7 @@ def reset() -> None:
     _state["reason"] = None
     _state["since"] = None
     _state["last_result_at"] = None
+    _state["credit_exhausted"] = False
 
 
 def get_status() -> dict:
@@ -82,4 +114,5 @@ def get_status() -> dict:
         "reason": _state["reason"],
         "since": _state["since"],
         "last_result_at": last,
+        "credit_exhausted": _state["credit_exhausted"],
     }

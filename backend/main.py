@@ -263,6 +263,11 @@ async def health():
         "status": source_status["status"],
         "service": "RentRadar",
         "last_result_at": source_status["last_result_at"],
+        # Surfaced even when status is "ok": credit exhaustion can be partial,
+        # in which case searches still succeed with fewer results. Without
+        # this there'd be no way to diagnose "why did results get worse"
+        # short of reading logs.
+        "credit_exhausted": source_status["credit_exhausted"],
     }
     if source_status["status"] == "degraded":
         body["reason"] = source_status["reason"]
