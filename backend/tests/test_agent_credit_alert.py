@@ -98,8 +98,8 @@ async def _drain_tasks():
 
 # ── partial credit exhaustion ────────────────────────────────────────────────
 #
-# Anakin exposes two APIs — search (listings) and wire (Reddit/HN/news). If
-# they bill from separate pools, one can run dry while the other keeps
+# Anakin's search API backs three independent portal calls (NoBroker, OLX,
+# Housing.com) — one can run dry on credits while the other two keep
 # working. Previously the credit check lived inside the "every source
 # failed" branch, so this case took the healthy path: no alert, no record,
 # results quietly worse.
@@ -132,8 +132,8 @@ def _partial_state():
             {"source": "NoBroker", "status": "ok", "results": [
                 {"title": "2BHK", "url": "https://nobroker.in/x", "snippet": "Rent 20000/month"}
             ]},
-            # ...while the wire API reports exhausted credits.
-            {"source": "Reddit", "status": "error", "data": "402", "credit_exhausted": True},
+            # ...while another portal's search call reports exhausted credits.
+            {"source": "OLX", "status": "error", "data": "402", "credit_exhausted": True},
         ],
     }
 
@@ -156,7 +156,7 @@ async def test_partial_credit_exhaustion_still_alerts(monkeypatch):
     assert sent["subject"] == "Urgent- RentRadar Credits expired"
     # The body must make clear this is the silent-degradation case, since
     # the site will look fine while returning fewer results.
-    assert "Reddit" in sent["body"]
+    assert "OLX" in sent["body"]
     assert "fewer results" in sent["body"]
 
 

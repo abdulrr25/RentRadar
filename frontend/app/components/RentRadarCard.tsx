@@ -16,7 +16,6 @@ interface RentBrief {
   locality_scores?: Record<string, number>;
   price_trend?: string;
   trend_note?: string;
-  reddit_pulse?: string;
   hn_signal?: string;
   green_flags?: string[];
   red_flags?: string[];
@@ -172,25 +171,8 @@ export default function RentRadarCard({ rawBrief, parsedQuery, shareId }: Props)
             } />
             <LocalityScores scores={brief.locality_scores} />
             <p className="mt-4 text-[11px] text-slate-500 leading-relaxed">
-              Estimates from Reddit, HN &amp; news — not objective data. Online discussions skew toward tech workers and popular neighbourhoods.
+              Estimates from HN &amp; news — not objective data. Online discussions skew toward tech workers and popular neighbourhoods.
             </p>
-          </div>
-          <Divider />
-        </>
-      )}
-
-      {/* Reddit pulse */}
-      {brief.reddit_pulse && (
-        <>
-          <div className="px-5 sm:px-7 py-6">
-            <SectionHeading title="Reddit Pulse" icon={
-              <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-              </svg>
-            } />
-            <blockquote className="rounded-xl border border-slate-200 border-l-4 border-l-brand-500 bg-slate-50 pl-4 pr-4 py-3 text-sm italic leading-relaxed text-slate-700">
-              {brief.reddit_pulse}
-            </blockquote>
           </div>
           <Divider />
         </>

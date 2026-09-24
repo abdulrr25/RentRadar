@@ -11,7 +11,7 @@ import { test, expect } from "@playwright/test";
  * extensively-tested backend pipeline.
  */
 
-const MOCK_SOURCES = ["Reddit", "Google News", "Hacker News", "NoBroker", "OLX", "Housing.com"];
+const MOCK_SOURCES = ["Google News", "Hacker News", "NoBroker", "OLX", "Housing.com"];
 
 const MOCK_EVENTS = [
   { type: "parsed", data: { locality: "Bellandur", bhk: "2BHK", max_rent: 25000, city: "Bangalore", raw_query: "2BHK near Bellandur under 25000" } },
@@ -36,7 +36,6 @@ const MOCK_EVENTS = [
       locality_scores: { safety: 8.0, overall: 7.5 },
       price_trend: "stable",
       trend_note: "Prices have been steady",
-      reddit_pulse: "Generally a good area to live",
       hn_signal: "No specific signal",
       green_flags: ["Good connectivity"],
       red_flags: ["Traffic during peak hours"],

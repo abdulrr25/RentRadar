@@ -44,7 +44,7 @@ def test_build_context_maps_refs_to_source_and_url():
                 {"title": "2BHK Bellandur", "url": "https://nobroker.in/x", "snippet": "₹25,000/month"},
             ],
         },
-        {"source": "Reddit", "status": "ok", "data": "People say Bellandur traffic is bad"},
+        {"source": "Hacker News", "status": "ok", "data": "People say Bellandur traffic is bad"},
     ]
     query = {"bhk": "2BHK", "locality": "Bellandur", "max_rent": 25000}
 

@@ -4,7 +4,7 @@ LangGraph agent for RentRadar.
 Graph:
   parallel_fetch_node  →  synthesis_node  →  END
 
-Node 1 fires 6 async fetches simultaneously (free sentiment APIs + Anakin search).
+Node 1 fires 5 async fetches simultaneously (free sentiment APIs + Anakin search).
 Node 2 sends all raw data to Groq (gpt-oss-120b) for structured synthesis.
 Groq is free — sign up at console.groq.com.
 """
@@ -24,7 +24,7 @@ warnings.filterwarnings("ignore", message=".*allowed_objects.*")
 from langgraph.graph import StateGraph, END
 from groq import Groq
 
-from tools.sentiment_sources import fetch_reddit, fetch_google_news, fetch_hackernews
+from tools.sentiment_sources import fetch_google_news, fetch_hackernews
 from tools.scraper import fetch_nobroker, fetch_olx, fetch_housing
 from prompts import SYSTEM_PROMPT, build_context
 from channels.email import send_admin_alert
@@ -38,7 +38,7 @@ def _groq_client() -> Groq:
 
 class RentRadarState(TypedDict):
     query: dict           # parsed query params from parser.py
-    raw_data: List[dict]  # all fetched results (6 sources)
+    raw_data: List[dict]  # all fetched results (5 sources)
     brief: str            # final synthesized JSON brief
     error: str            # any critical pipeline error
 
@@ -47,8 +47,8 @@ class RentRadarState(TypedDict):
 
 async def parallel_fetch_node(state: RentRadarState) -> RentRadarState:
     """
-    Fires all 6 data fetches simultaneously.
-    - Free APIs:   Reddit, Google News, Hacker News
+    Fires all 5 data fetches simultaneously.
+    - Free APIs:   Google News, Hacker News
     - Anakin API:  NoBroker, OLX, Housing.com
 
     Uses return_exceptions=True so a single timeout never kills the pipeline.
@@ -59,7 +59,6 @@ async def parallel_fetch_node(state: RentRadarState) -> RentRadarState:
     max_rent = q["max_rent"]
 
     results = await asyncio.gather(
-        fetch_reddit(locality, bhk),
         fetch_google_news(locality),
         fetch_hackernews(locality),
         fetch_nobroker(locality, bhk, max_rent),
@@ -102,7 +101,7 @@ def _to_int_rent(val) -> int | None:
 
 async def synthesis_node(state: RentRadarState) -> RentRadarState:
     """
-    Sends all raw data to Groq (Llama 3.3 70B) for structured synthesis.
+    Sends all raw data to Groq (gpt-oss-120b) for structured synthesis.
     Groq is free — no credits needed.
     """
     raw = state["raw_data"]

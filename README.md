@@ -1,6 +1,6 @@
 # RentRadar 🏠
 
-> AI rental intelligence for Bangalore — type a plain-English query, get a live-streamed brief with top listings, locality scores, Reddit pulse, price trend, and scam alerts.
+> AI rental intelligence for Bangalore — type a plain-English query, get a live-streamed brief with top listings, locality scores, price trend, and scam alerts.
 
 ![Status](https://img.shields.io/badge/status-live-brightgreen)
 ![Python](https://img.shields.io/badge/python-3.11+-blue)
@@ -14,15 +14,14 @@
 Type **"2BHK near Bellandur under ₹25,000"** and RentRadar:
 
 1. Parses your natural language query into structured parameters
-2. Fires **6 parallel data fetches** across live portals and discussion platforms
-3. Synthesises everything with **Llama 3.3 70B via Groq** into a structured rental brief
+2. Fires **5 parallel data fetches** across live portals and discussion platforms
+3. Synthesises everything with **gpt-oss-120b via Groq** into a structured rental brief
 4. Streams results back in real time via Server-Sent Events
 
 **Output per search:**
 - Top listings (NoBroker · OLX · Housing.com) with prices, highlights, and direct property links
 - Locality scores — safety, water supply, traffic, food, public transport (1–10)
 - Price trend direction (rising / stable / falling) with a one-line insight
-- Reddit pulse — what Bangalore renters are saying right now
 - Tech-worker signal from Hacker News
 - Green flags, red flags, and scam alerts
 - Plain-English verdict
@@ -45,9 +44,9 @@ Type **"2BHK near Bellandur under ₹25,000"** and RentRadar:
 │       ┌───────────┴──────────┐             │
 │       ▼                      ▼             │
 │  Free sentiment APIs  Anakin Search API    │
-│  · Reddit (OAuth)     · NoBroker           │
-│  · Google News (RSS)  · OLX               │
-│  · Hacker News (HN)   · Housing.com        │
+│  · Google News (RSS)  · NoBroker           │
+│  · Hacker News (HN)   · OLX               │
+│                        · Housing.com        │
 │       │                      │             │
 │       └───────────┬──────────┘             │
 │                   ▼                         │
@@ -62,7 +61,6 @@ Type **"2BHK near Bellandur under ₹25,000"** and RentRadar:
 
 | Source | Tool | What It Provides |
 |--------|------|-----------------|
-| Reddit (`r/bangalore`) | Reddit official API | Tenant sentiment, locality reputation |
 | Google News | Google News RSS | Recent rental market coverage |
 | Hacker News | Algolia HN Search API | Tech-worker housing signals |
 | NoBroker | Anakin Search API | Owner-direct listings with prices |
@@ -81,7 +79,7 @@ RentRadar/
 │   ├── parser.py        # Natural language → structured query
 │   ├── prompts.py       # System prompt + context builder with ref-map
 │   ├── tools/
-│   │   ├── sentiment_sources.py  # Free APIs (Reddit, Google News, HN)
+│   │   ├── sentiment_sources.py  # Free APIs (Google News, HN)
 │   │   └── scraper.py            # Anakin Search API (NoBroker, OLX, Housing.com)
 │   └── requirements.txt
 ├── frontend/
@@ -142,7 +140,6 @@ The SSE event-parsing logic used to live entirely inline inside `page.tsx`'s fet
 - Node.js 18+
 - [Anakin API Key](https://anakin.ai) — listing search only (NoBroker/OLX/Housing.com)
 - [Groq API Key](https://console.groq.com) — free
-- [Reddit app credentials](https://www.reddit.com/prefs/apps) (type: "script") — free, client-credentials only, no account password stored
 
 ### 1. Clone and configure
 
@@ -156,8 +153,6 @@ Fill in `.env`:
 ```env
 ANAKIN_API_KEY=your_anakin_api_key
 GROQ_API_KEY=your_groq_api_key
-REDDIT_CLIENT_ID=your_reddit_client_id
-REDDIT_CLIENT_SECRET=your_reddit_client_secret
 NEXT_PUBLIC_API_URL=http://localhost:8000
 ```
 
@@ -197,7 +192,7 @@ Open: `http://localhost:3000`
 1. Connect your GitHub repo on [render.com](https://render.com)
 2. Select **New Web Service** → choose this repo → root directory: `backend`
 3. Runtime: **Python 3**, Build: `pip install -r requirements.txt`, Start: `uvicorn main:app --host 0.0.0.0 --port $PORT`
-4. Add env vars: `ANAKIN_API_KEY`, `GROQ_API_KEY`, `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET`
+4. Add env vars: `ANAKIN_API_KEY`, `GROQ_API_KEY`
 5. Deploy — note the `https://rentradar-backend.onrender.com` URL
 
 ### Frontend → Vercel

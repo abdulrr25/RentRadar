@@ -9,7 +9,7 @@
 
 export type SourceStatus = "idle" | "fetching" | "ok" | "error";
 
-export const ALL_SOURCES = ["Reddit", "Google News", "Hacker News", "NoBroker", "OLX", "Housing.com"];
+export const ALL_SOURCES = ["Google News", "Hacker News", "NoBroker", "OLX", "Housing.com"];
 
 export interface SearchState {
   loading: boolean;

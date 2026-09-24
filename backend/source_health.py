@@ -35,12 +35,13 @@ def mark_credit_exhausted() -> bool:
     Record that at least one Anakin API reported exhausted credits.
 
     Tracked separately from `degraded` on purpose: credit exhaustion can be
-    partial. Anakin exposes two APIs (search for listings, wire for
-    Reddit/HN/news) and if those bill from separate pools, one can run dry
-    while the other keeps working — results quietly get worse without a
-    total outage. That still needs to page the owner (it costs money to
-    fix), but it does not warrant telling users the site is broken while
-    listings are still coming back.
+    partial. Anakin's search API now backs only the three listing portals
+    (NoBroker, OLX, Housing.com) — HN/Google News run on free APIs outside
+    Anakin entirely — but a single portal's search call can still fail on
+    its own while the other two succeed, and results quietly get worse
+    without a total outage. That still needs to page the owner (it costs
+    money to fix), but it does not warrant telling users the site is
+    broken while listings are still coming back.
 
     Returns True only on the transition into exhaustion, so callers page
     once rather than on every subsequent search.

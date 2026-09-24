@@ -22,7 +22,7 @@ export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: "RentRadar — AI Rental Intelligence for Bangalore",
   description:
-    "Find your Bangalore flat instantly. RentRadar scans NoBroker, OLX, Housing.com, Reddit and news in real time to surface ranked listings, locality scores, price trends and scam alerts.",
+    "Find your Bangalore flat instantly. RentRadar scans NoBroker, OLX, Housing.com and news in real time to surface ranked listings, locality scores, price trends and scam alerts.",
   keywords: ["Bangalore rent", "flat for rent Bangalore", "rental intelligence", "NoBroker", "Housing.com", "AI rental search"],
   openGraph: {
     title: "RentRadar — AI Rental Intelligence for Bangalore",

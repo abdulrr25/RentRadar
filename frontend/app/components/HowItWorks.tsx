@@ -16,8 +16,8 @@ const STEPS = [
         <circle cx="12" cy="12" r="3"/><path d="M12 1v4M12 19v4M4.22 4.22l2.83 2.83M16.95 16.95l2.83 2.83M1 12h4M19 12h4M4.22 19.78l2.83-2.83M16.95 7.05l2.83-2.83"/>
       </svg>
     ),
-    title: "Six sources, in parallel",
-    body: "NoBroker, OLX, Housing.com, Reddit, Google News and Hacker News — all scanned simultaneously in under 15 seconds.",
+    title: "Five sources, in parallel",
+    body: "NoBroker, OLX, Housing.com, Google News and Hacker News — all scanned simultaneously in under 15 seconds.",
   },
   {
     icon: (
@@ -34,7 +34,6 @@ const SOURCES = [
   { name: "NoBroker",    dot: "#16a34a" },
   { name: "OLX",         dot: "#9333ea" },
   { name: "Housing.com", dot: "#2563eb" },
-  { name: "Reddit",      dot: "#ea580c" },
   { name: "Google News", dot: "#4f46e5" },
   { name: "Hacker News", dot: "#d97706" },
 ];
@@ -95,8 +94,7 @@ export default function HowItWorks() {
         </div>
 
         <p className="mt-10 text-center text-xs text-slate-500">
-          Powered by <span className="font-medium text-slate-700">Llama 3.3 70B</span> via Groq ·{" "}
-          <span className="font-medium text-slate-700">Anakin Wire API</span> · Free, no account required
+          Powered by <span className="font-medium text-slate-700">gpt-oss-120b</span> via Groq · Free, no account required
         </p>
       </div>
     </section>

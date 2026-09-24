@@ -104,7 +104,7 @@ export default function Home() {
           <nav className="flex items-center gap-2 sm:gap-3">
             <div className="hidden sm:flex items-center gap-1.5 text-xs text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-3 py-1.5 font-medium">
               <span className="h-1.5 w-1.5 rounded-full bg-emerald-500 animate-pulse" />
-              Live · 6 sources
+              Live · 5 sources
             </div>
             <a
               href="https://github.com/abdulrr25/RentRadar"
@@ -147,7 +147,7 @@ export default function Home() {
 
             <p className="rise delay-2 mx-auto mt-6 max-w-lg text-base sm:text-lg leading-relaxed text-slate-600">
               Ask in plain English. RentRadar scans{" "}
-              <span className="font-medium text-slate-800">NoBroker, OLX, Housing.com, Reddit and news</span>{" "}
+              <span className="font-medium text-slate-800">NoBroker, OLX, Housing.com and news</span>{" "}
               in parallel — then returns ranked listings, locality scores, price trends and scam alerts.
             </p>
 
@@ -158,8 +158,8 @@ export default function Home() {
             {/* Stats */}
             <div className="rise delay-4 mt-8 flex flex-wrap items-center justify-center gap-x-6 gap-y-2 text-xs text-slate-500">
               {[
-                { val: "6",       label: "live data sources" },
-                { val: "Llama 3.3", label: "70B AI synthesis" },
+                { val: "5",       label: "live data sources" },
+                { val: "gpt-oss", label: "120b AI synthesis" },
                 { val: "<15s",    label: "average response" },
                 { val: "Free",    label: "no sign-up needed" },
               ].map(({ val, label }) => (

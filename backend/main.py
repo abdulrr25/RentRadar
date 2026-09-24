@@ -144,7 +144,7 @@ async def search(request: Request, body: SearchRequest):
 
             # Phase 2: signal fetch start
             sources = [
-                "Reddit", "Google News", "Hacker News",
+                "Google News", "Hacker News",
                 "NoBroker", "OLX", "Housing.com",
             ]
             yield f"data: {json.dumps({'type': 'fetching', 'sources': sources})}\n\n"
