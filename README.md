@@ -44,14 +44,14 @@ Type **"2BHK near Bellandur under ₹25,000"** and RentRadar:
 │                   │                         │
 │       ┌───────────┴──────────┐             │
 │       ▼                      ▼             │
-│  Anakin Wire API      Anakin Search API    │
-│  · Reddit             · NoBroker           │
-│  · Google News        · OLX               │
-│  · Hacker News        · Housing.com        │
+│  Free sentiment APIs  Anakin Search API    │
+│  · Reddit (OAuth)     · NoBroker           │
+│  · Google News (RSS)  · OLX               │
+│  · Hacker News (HN)   · Housing.com        │
 │       │                      │             │
 │       └───────────┬──────────┘             │
 │                   ▼                         │
-│         Groq / Llama 3.3 70B               │
+│         Groq / gpt-oss-120b                │
 │         (synthesis → JSON brief)           │
 │                   │                         │
 │         SSE stream → frontend              │
@@ -62,9 +62,9 @@ Type **"2BHK near Bellandur under ₹25,000"** and RentRadar:
 
 | Source | Tool | What It Provides |
 |--------|------|-----------------|
-| Reddit (`r/bangalore`) | Anakin Wire API | Tenant sentiment, locality reputation |
-| Google News | Anakin Wire API | Recent rental market coverage |
-| Hacker News | Anakin Wire API | Tech-worker housing signals |
+| Reddit (`r/bangalore`) | Reddit official API | Tenant sentiment, locality reputation |
+| Google News | Google News RSS | Recent rental market coverage |
+| Hacker News | Algolia HN Search API | Tech-worker housing signals |
 | NoBroker | Anakin Search API | Owner-direct listings with prices |
 | OLX | Anakin Search API | Individual rental ad pages |
 | Housing.com | Anakin Search API | Broker listings with deposit info |
@@ -81,8 +81,8 @@ RentRadar/
 │   ├── parser.py        # Natural language → structured query
 │   ├── prompts.py       # System prompt + context builder with ref-map
 │   ├── tools/
-│   │   ├── holocron.py  # Wire API (Reddit, Google News, HN)
-│   │   └── scraper.py   # Search API (NoBroker, OLX, Housing.com)
+│   │   ├── sentiment_sources.py  # Free APIs (Reddit, Google News, HN)
+│   │   └── scraper.py            # Anakin Search API (NoBroker, OLX, Housing.com)
 │   └── requirements.txt
 ├── frontend/
 │   ├── app/
@@ -140,8 +140,9 @@ The SSE event-parsing logic used to live entirely inline inside `page.tsx`'s fet
 ### Prerequisites
 - Python 3.11+
 - Node.js 18+
-- [Anakin API Key](https://anakin.ai)
+- [Anakin API Key](https://anakin.ai) — listing search only (NoBroker/OLX/Housing.com)
 - [Groq API Key](https://console.groq.com) — free
+- [Reddit app credentials](https://www.reddit.com/prefs/apps) (type: "script") — free, client-credentials only, no account password stored
 
 ### 1. Clone and configure
 
@@ -155,6 +156,8 @@ Fill in `.env`:
 ```env
 ANAKIN_API_KEY=your_anakin_api_key
 GROQ_API_KEY=your_groq_api_key
+REDDIT_CLIENT_ID=your_reddit_client_id
+REDDIT_CLIENT_SECRET=your_reddit_client_secret
 NEXT_PUBLIC_API_URL=http://localhost:8000
 ```
 
@@ -194,7 +197,7 @@ Open: `http://localhost:3000`
 1. Connect your GitHub repo on [render.com](https://render.com)
 2. Select **New Web Service** → choose this repo → root directory: `backend`
 3. Runtime: **Python 3**, Build: `pip install -r requirements.txt`, Start: `uvicorn main:app --host 0.0.0.0 --port $PORT`
-4. Add env vars: `ANAKIN_API_KEY`, `GROQ_API_KEY`
+4. Add env vars: `ANAKIN_API_KEY`, `GROQ_API_KEY`, `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET`
 5. Deploy — note the `https://rentradar-backend.onrender.com` URL
 
 ### Frontend → Vercel

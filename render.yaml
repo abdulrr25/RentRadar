@@ -11,6 +11,12 @@ services:
         sync: false
       - key: GROQ_API_KEY
         sync: false
+      # Reddit's official free API (client-credentials) — see .env.example
+      # for how to get these from reddit.com/prefs/apps.
+      - key: REDDIT_CLIENT_ID
+        sync: false
+      - key: REDDIT_CLIENT_SECRET
+        sync: false
       # Required for saved-search alerts / shareable briefs to survive a
       # redeploy — Render's own disk on the free plan does not. Point at a
       # free Turso database (turso.tech) instead of leaving unset in prod.

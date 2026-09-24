@@ -4,8 +4,8 @@ LangGraph agent for RentRadar.
 Graph:
   parallel_fetch_node  →  synthesis_node  →  END
 
-Node 1 fires 6 async fetches simultaneously (Wire + Universal Scraper).
-Node 2 sends all raw data to Groq (Llama 3.3 70B) for structured synthesis.
+Node 1 fires 6 async fetches simultaneously (free sentiment APIs + Anakin search).
+Node 2 sends all raw data to Groq (gpt-oss-120b) for structured synthesis.
 Groq is free — sign up at console.groq.com.
 """
 
@@ -24,7 +24,7 @@ warnings.filterwarnings("ignore", message=".*allowed_objects.*")
 from langgraph.graph import StateGraph, END
 from groq import Groq
 
-from tools.holocron import fetch_reddit, fetch_google_news, fetch_hackernews
+from tools.sentiment_sources import fetch_reddit, fetch_google_news, fetch_hackernews
 from tools.scraper import fetch_nobroker, fetch_olx, fetch_housing
 from prompts import SYSTEM_PROMPT, build_context
 from channels.email import send_admin_alert
@@ -48,8 +48,8 @@ class RentRadarState(TypedDict):
 async def parallel_fetch_node(state: RentRadarState) -> RentRadarState:
     """
     Fires all 6 data fetches simultaneously.
-    - Wire API:    Reddit, Google News, Hacker News
-    - Search API:  NoBroker, OLX, Housing.com
+    - Free APIs:   Reddit, Google News, Hacker News
+    - Anakin API:  NoBroker, OLX, Housing.com
 
     Uses return_exceptions=True so a single timeout never kills the pipeline.
     """
