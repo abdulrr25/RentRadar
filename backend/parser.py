@@ -61,6 +61,13 @@ _FILLER_WORDS = {
     "need", "want", "find", "search",
 }
 
+# A time/distance unit immediately after a rent-regex number match means it
+# was never a currency amount (e.g. "under 30 mins") — see parse_query.
+_RENT_UNIT_RE = re.compile(
+    r"\s*(?:min|mins|minute|minutes|hr|hrs|hour|hours|km|kms|kilometers?|sec|secs|seconds?)\b",
+    re.IGNORECASE,
+)
+
 
 def _fix_case(word: str) -> str:
     # Leave acronyms/already-capitalized input alone (e.g. "HAL", "ITPL");
@@ -158,12 +165,25 @@ def parse_query(query: str) -> dict:
             if fallback:
                 result["locality"] = fallback
 
-    # Extract max rent — handles ₹25000, Rs 25,000, under 25k, below 25000
-    rent_match = re.search(
+    # Extract max rent — handles ₹25000, Rs 25,000, under 25k, below 25000.
+    # "under"/"below" are common English words unrelated to money — plain
+    # "...under 30 mins to ITPL" would otherwise parse as a ₹30 budget, and
+    # the real listings all get hard-filtered out as "over budget" downstream
+    # in agent.py. Checked as a separate step rather than a regex lookahead:
+    # a lookahead here is defeatable by backtracking (the greedy digit group
+    # backs off to a shorter prefix like "3" to dodge a "not followed by
+    # mins" assertion on "30"), so each full candidate match is found first
+    # and only then checked against what immediately follows it.
+    rent_match = None
+    for candidate in re.finditer(
         r"(?:under|below|max|upto|up\s+to|₹|rs\.?)\s*(\d[\d,]*[kK]?)",
         query,
         re.IGNORECASE,
-    )
+    ):
+        if _RENT_UNIT_RE.match(query, candidate.end()):
+            continue  # a time/distance unit, not a currency amount
+        rent_match = candidate
+        break
     if rent_match:
         raw = rent_match.group(1).replace(",", "").strip()
         try:

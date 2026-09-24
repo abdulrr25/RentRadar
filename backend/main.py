@@ -119,6 +119,20 @@ class SearchRequest(BaseModel):
     query: str = Field(min_length=1, max_length=300)
 
 
+def _parse_successful_brief(brief: str) -> dict | None:
+    """Parse `brief` and return it only if it's a genuinely successful result
+    (not sources_unavailable/error), else None. Shared by the cache-write and
+    share-persist checks below so a future "don't persist this" flag only
+    needs to change in one place."""
+    try:
+        obj = json.loads(brief)
+    except (json.JSONDecodeError, TypeError):
+        return None
+    if obj.get("sources_unavailable") or obj.get("error"):
+        return None
+    return obj
+
+
 @app.post("/search")
 @limiter.limit("10/10minutes")
 async def search(request: Request, body: SearchRequest):
@@ -175,11 +189,7 @@ async def search(request: Request, body: SearchRequest):
                 brief = result["brief"]
 
                 # Cache only genuinely successful briefs.
-                try:
-                    cache_check = json.loads(brief)
-                except (json.JSONDecodeError, TypeError):
-                    cache_check = None
-                if cache_check and not cache_check.get("sources_unavailable") and not cache_check.get("error"):
+                if _parse_successful_brief(brief) is not None:
                     query_cache.set(
                         parsed["locality"], parsed["bhk"], parsed["max_rent"],
                         [(item["source"], item["status"]) for item in result["raw_data"]],
@@ -194,8 +204,7 @@ async def search(request: Request, body: SearchRequest):
             # briefs, which aren't worth a share link. Best-effort: a storage
             # failure never breaks the search the user is looking at.
             try:
-                brief_obj = json.loads(brief)
-                if not brief_obj.get("sources_unavailable") and not brief_obj.get("error"):
+                if _parse_successful_brief(brief) is not None:
                     share_id = await briefs_store.save_brief(
                         parsed["locality"], parsed["bhk"], parsed["max_rent"], brief
                     )

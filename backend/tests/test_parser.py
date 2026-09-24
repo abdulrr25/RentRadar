@@ -46,6 +46,25 @@ def test_malformed_rent_falls_back_to_default():
     assert r["max_rent"] == 50000
 
 
+def test_commute_time_is_not_mistaken_for_rent():
+    # Regression: "under 30 mins" used to match the rent regex's bare
+    # "under N" branch, parsing a ₹30 budget from a commute-time mention —
+    # then agent.py's hard budget filter dropped every real listing as
+    # "over budget" against that bogus ₹30 cap.
+    r = parse_query("2BHK near Whitefield under 30 mins to ITPL")
+    assert r["max_rent"] == 50000
+
+
+def test_commute_time_does_not_shadow_a_real_budget_later_in_the_query():
+    r = parse_query("2BHK under 30 mins from ITPL under ₹25000")
+    assert r["max_rent"] == 25000
+
+
+def test_commute_hours_is_not_mistaken_for_rent():
+    r = parse_query("1BHK below 1 hour from Whitefield")
+    assert r["max_rent"] == 50000
+
+
 def test_empty_query_does_not_crash():
     r = parse_query("")
     assert r["bhk"] == "2BHK"

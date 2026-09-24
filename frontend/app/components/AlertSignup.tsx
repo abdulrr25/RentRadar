@@ -63,14 +63,26 @@ export default function AlertSignup({ locality, bhk, maxRent }: Props) {
   const startTelegram = async () => {
     setStatus("working");
     setErrorMsg(null);
+    // window.open must happen synchronously inside the click's user-activation
+    // window — once this function awaits a real network request, Safari (and
+    // increasingly other browsers) treats a later window.open as an
+    // unsolicited popup and silently blocks it, with no error to catch.
+    // Opening a blank tab now and redirecting it once the real link is known
+    // keeps the activation intact. This needs a reference to the opened
+    // window to redirect it later, so it can't pass noopener/noreferrer here
+    // — acceptable since the eventual destination is our own backend's
+    // response, not arbitrary content.
+    const popup = window.open("", "_blank");
     const { ok, data } = await createAlert({ channel: "telegram", ...base });
     if (!ok || !data.telegram_link) {
+      popup?.close();
       setStatus("error");
       setErrorMsg(ok ? "Telegram alerts aren't set up yet." : "Couldn't start — please try again.");
       return;
     }
     setTelegramLink(data.telegram_link);
-    window.open(data.telegram_link, "_blank", "noopener,noreferrer");
+    if (popup) popup.location.href = data.telegram_link;
+    else window.open(data.telegram_link, "_blank", "noopener,noreferrer");
     setStatus("pending");
   };
 

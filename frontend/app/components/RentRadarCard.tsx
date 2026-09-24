@@ -48,12 +48,19 @@ function Divider() {
   return <div className="border-t border-slate-200 mx-5 sm:mx-7" />;
 }
 
+// No `m` flag: with it, `$` matches end-of-*line*, not end-of-string, so a
+// closing-fence-shaped substring inside a free-text field (e.g. the LLM's
+// `verdict`) could get stripped instead of — or before — the real trailing
+// fence at the actual end of the response.
+function stripCodeFence(s: string): string {
+  return s.replace(/^```json\s*/i, "").replace(/```\s*$/, "").trim();
+}
+
 export default function RentRadarCard({ rawBrief, parsedQuery, shareId }: Props) {
   const brief: RentBrief | null = useMemo(() => {
     try {
-      const s = rawBrief.replace(/^```json\s*/i, "").replace(/```\s*$/m, "").trim();
-      const p = JSON.parse(s);
-      if (p?.error === "synthesis_failed" && p?.raw) return JSON.parse(p.raw.replace(/^```json\s*/i, "").replace(/```\s*$/m, "").trim());
+      const p = JSON.parse(stripCodeFence(rawBrief));
+      if (p?.error === "synthesis_failed" && p?.raw) return JSON.parse(stripCodeFence(p.raw));
       return p;
     } catch { return null; }
   }, [rawBrief]);
@@ -83,6 +90,12 @@ export default function RentRadarCard({ rawBrief, parsedQuery, shareId }: Props)
 
   const tKey = brief.price_trend?.toLowerCase() ?? "stable";
   const trend = TREND[tKey] ?? TREND.stable;
+  // `!= null` rather than truthy: a genuine ₹0 budget (a user searching
+  // "under ₹0") must still count as present — a truthy check would hide
+  // the Share button and alert signup for that search.
+  const hasQueryContext = !!(
+    parsedQuery?.locality && parsedQuery?.bhk && parsedQuery?.max_rent != null
+  );
 
   return (
     <div className="card-enter ring-gradient card mt-8 w-full overflow-hidden rounded-3xl" style={{ boxShadow: "0 24px 64px -12px rgba(79,70,229,0.22), 0 8px 24px -4px rgba(15,23,42,0.1)" }}>
@@ -111,9 +124,9 @@ export default function RentRadarCard({ rawBrief, parsedQuery, shareId }: Props)
           )}
         </div>
         {brief.trend_note && <p className="mt-3 text-xs text-indigo-200 leading-relaxed">{brief.trend_note}</p>}
-        {shareId && parsedQuery?.locality && parsedQuery?.bhk && parsedQuery?.max_rent && (
+        {shareId && hasQueryContext && (
           <div className="mt-4 flex justify-end">
-            <ShareButton shareId={shareId} locality={parsedQuery.locality} bhk={parsedQuery.bhk} maxRent={parsedQuery.max_rent} />
+            <ShareButton shareId={shareId} locality={parsedQuery!.locality!} bhk={parsedQuery!.bhk!} maxRent={parsedQuery!.max_rent!} />
           </div>
         )}
       </div>
@@ -151,10 +164,10 @@ export default function RentRadarCard({ rawBrief, parsedQuery, shareId }: Props)
       {/* Alert signup — shown regardless of whether this search found an
           in-budget listing, since "nothing matched yet" is exactly when a
           user most wants to be notified the moment something does. */}
-      {parsedQuery?.locality && parsedQuery?.bhk && parsedQuery?.max_rent && (
+      {hasQueryContext && (
         <>
           <div className="px-5 sm:px-7 py-6">
-            <AlertSignup locality={parsedQuery.locality} bhk={parsedQuery.bhk} maxRent={parsedQuery.max_rent} />
+            <AlertSignup locality={parsedQuery!.locality!} bhk={parsedQuery!.bhk!} maxRent={parsedQuery!.max_rent!} />
           </div>
           <Divider />
         </>

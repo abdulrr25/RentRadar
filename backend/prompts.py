@@ -3,7 +3,6 @@ LLM synthesis prompt for RentRadar.
 Produces a structured JSON rental brief from multi-source raw data.
 """
 
-import json
 import re
 
 # Keep total context well under 8K tokens (Groq free tier: 12K TPM).
@@ -76,7 +75,7 @@ def extract_price_int(text: str) -> "int | None":
             raw = m.group(1).replace(",", "")
             try:
                 amount = int(raw)
-                # Valid monthly rent range for Bangalore: ₹5,000–₹2,00,000
+                # Valid monthly rent range for Bangalore: ₹3,000–₹2,00,000
                 if 3000 <= amount <= 200000:
                     return amount
             except ValueError:
@@ -92,20 +91,7 @@ def _extract_price(text: str) -> str:
 
 def _trim(data, limit: int) -> str:
     """Convert data to string and hard-trim to limit chars."""
-    if isinstance(data, str):
-        text = data
-    else:
-        try:
-            if isinstance(data, dict) and "data" in data:
-                inner = data["data"]
-                if isinstance(inner, dict) and "data" in inner:
-                    inner = inner["data"]
-                text = json.dumps(inner, ensure_ascii=False)
-            else:
-                text = json.dumps(data, ensure_ascii=False)
-        except Exception:
-            text = str(data)
-
+    text = data if isinstance(data, str) else str(data)
     if len(text) > limit:
         text = text[:limit] + "…"
     return text

@@ -30,6 +30,17 @@ def test_matches_domain_case_insensitive():
     assert _matches_domain("https://WWW.NoBroker.IN/x", "nobroker.in") is True
 
 
+def test_matches_domain_false_for_lookalike_suffix():
+    # "nobroker.in" is a substring of this host but it is not nobroker.in or
+    # a subdomain of it — a naive `expected_domain in netloc` check would
+    # wrongly trust this as a real NoBroker page.
+    assert _matches_domain("https://evilnobroker.in/x", "nobroker.in") is False
+
+
+def test_matches_domain_false_for_lookalike_parent_domain():
+    assert _matches_domain("https://nobroker.in.scam.com/x", "nobroker.in") is False
+
+
 def test_generic_listing_page_detects_real_nobroker_search_url():
     # Captured live: a "1BHK in Kadubeesanahalli" search returning this as a
     # "listing" — it's actually NoBroker's locality-wide search results page

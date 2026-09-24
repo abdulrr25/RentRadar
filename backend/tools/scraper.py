@@ -29,11 +29,17 @@ def _search_url() -> str:
 
 
 def _matches_domain(url: str, expected_domain: str) -> bool:
+    """
+    True only for the real domain or a genuine subdomain of it — plain
+    substring containment would also match a lookalike like
+    "evilnobroker.in" or "nobroker.in.scam.com", showing a phishing link
+    under a trusted "NoBroker" badge.
+    """
     try:
         netloc = urlparse(url).netloc.lower()
     except ValueError:
         return False
-    return expected_domain in netloc
+    return netloc == expected_domain or netloc.endswith("." + expected_domain)
 
 
 def _is_generic_listing_page(url: str) -> bool:

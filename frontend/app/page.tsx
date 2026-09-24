@@ -40,7 +40,8 @@ export default function Home() {
 
   const handleSearch = useCallback(async (query: string) => {
     abortRef.current?.abort();
-    abortRef.current = new AbortController();
+    const controller = new AbortController();
+    abortRef.current = controller;
     setHasSearched(true); setLastQuery(query);
     dispatch({ type: "reset" });
     track("search_submitted");
@@ -50,7 +51,7 @@ export default function Home() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ query }),
-        signal: abortRef.current.signal,
+        signal: controller.signal,
       });
 
       if (!res.body) throw new Error("Response body is empty.");
@@ -70,9 +71,17 @@ export default function Home() {
         }
       }
     } catch (err: any) {
+      // A newer search already superseded this one (its `reset` already
+      // fired) — this request's own terminal dispatch would stomp on the
+      // new search's in-progress `loading` state. Abort's aftermath is the
+      // only case that reaches here after being superseded, since the
+      // aborted fetch's reader rejects almost immediately.
+      if (abortRef.current !== controller) return;
       if (err?.name === "AbortError") dispatch({ type: "aborted" });
       else dispatch({ type: "error", message: classifyBackendError(err).message });
-    } finally { dispatch({ type: "done" }); }
+    } finally {
+      if (abortRef.current === controller) dispatch({ type: "done" });
+    }
   }, []);
 
   return (
@@ -185,6 +194,7 @@ export default function Home() {
               <div className="mt-4 flex flex-wrap gap-2">
                 {[
                   {
+                    key: "locality",
                     icon: (
                       <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z" /><circle cx="12" cy="10" r="3" />
@@ -193,6 +203,7 @@ export default function Home() {
                     val: parsedQuery.locality,
                   },
                   {
+                    key: "bhk",
                     icon: (
                       <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M2 4v16" /><path d="M2 8h18a2 2 0 0 1 2 2v10" /><path d="M2 17h20" /><path d="M6 8v9" />
@@ -201,6 +212,7 @@ export default function Home() {
                     val: parsedQuery.bhk,
                   },
                   {
+                    key: "max_rent",
                     icon: (
                       <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <path d="M6 3h12" /><path d="M6 8h12" /><path d="M6 13 15 21" /><path d="M6 13h3c3 0 5-1.5 5-5" />
@@ -208,8 +220,8 @@ export default function Home() {
                     ),
                     val: `max ₹${parsedQuery.max_rent?.toLocaleString("en-IN")}`,
                   },
-                ].map(({ icon, val }) => (
-                  <span key={val} className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3.5 py-1 text-xs font-medium text-slate-600" style={{ boxShadow: "0 1px 2px rgba(15,23,42,0.05)" }}>
+                ].map(({ key, icon, val }) => (
+                  <span key={key} className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-white px-3.5 py-1 text-xs font-medium text-slate-600" style={{ boxShadow: "0 1px 2px rgba(15,23,42,0.05)" }}>
                     {icon} {val}
                   </span>
                 ))}

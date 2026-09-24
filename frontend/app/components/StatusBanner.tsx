@@ -28,15 +28,27 @@ export default function StatusBanner() {
   }, []);
 
   useEffect(() => {
-    if (degraded && sessionStorage.getItem(DISMISS_KEY) === "1") {
-      setDismissed(true);
+    // sessionStorage throws in Safari private browsing (and can be blocked
+    // by extensions/enterprise policy) — unguarded, that throw during render
+    // would take down the whole page via the nearest error boundary just
+    // because this purely informational banner happened to be degraded.
+    try {
+      if (degraded && sessionStorage.getItem(DISMISS_KEY) === "1") {
+        setDismissed(true);
+      }
+    } catch {
+      // storage unavailable — banner just won't remember a dismissal
     }
   }, [degraded]);
 
   if (!degraded || dismissed) return null;
 
   const dismiss = () => {
-    sessionStorage.setItem(DISMISS_KEY, "1");
+    try {
+      sessionStorage.setItem(DISMISS_KEY, "1");
+    } catch {
+      // storage unavailable — dismissal won't persist across a reload, fine
+    }
     setDismissed(true);
   };
 

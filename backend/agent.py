@@ -36,6 +36,20 @@ def _groq_client() -> Groq:
     return Groq(api_key=os.getenv("GROQ_API_KEY", ""))
 
 
+# asyncio only holds a weak reference to a task created via create_task — with
+# nothing else referencing it, the task can be garbage-collected mid-flight,
+# silently dropping the outage alert exactly when it matters most. Keeping a
+# strong reference here until it finishes (discarded via the done-callback)
+# is the fix asyncio's own docs recommend.
+_background_tasks: set = set()
+
+
+def _fire_and_forget(coro) -> None:
+    task = asyncio.create_task(coro)
+    _background_tasks.add(task)
+    task.add_done_callback(_background_tasks.discard)
+
+
 class RentRadarState(TypedDict):
     query: dict           # parsed query params from parser.py
     raw_data: List[dict]  # all fetched results (5 sources)
@@ -90,9 +104,18 @@ async def parallel_fetch_node(state: RentRadarState) -> RentRadarState:
 # ── Node 2: LLM Synthesis ───────────────────────────────────────────────────
 
 def _to_int_rent(val) -> int | None:
-    """Coerce LLM rent value (int or string) to int; return None if unparseable."""
+    """Coerce LLM rent value (int or string) to int; return None if unparseable.
+
+    The model sees comma-formatted prices in its own input (prompts.py tags
+    snippets with "[PRICE: ₹45,000]") and can echo that formatting back in
+    "rent" instead of a bare int — int("45,000") raises ValueError, which
+    would otherwise make a real over-budget listing look like an unknown
+    price and slip past the hard budget filter below.
+    """
     if val is None:
         return None
+    if isinstance(val, str):
+        val = val.replace(",", "").replace("₹", "").strip()
     try:
         return int(val)
     except (ValueError, TypeError):
@@ -121,7 +144,7 @@ async def synthesis_node(state: RentRadarState) -> RentRadarState:
         # Only page the admin on the moment of transition into an outage, not
         # on every subsequent search while it's still down.
         if is_new_outage:
-            asyncio.create_task(send_admin_alert(
+            _fire_and_forget(send_admin_alert(
                 "RentRadar alert: all live data sources are down",
                 f'A user just searched for "{query_desc}" and every live data source failed.\n\n'
                 "Check the Render logs for the exact error — could be the SearXNG "
@@ -166,18 +189,20 @@ async def synthesis_node(state: RentRadarState) -> RentRadarState:
     # Validate JSON — wrap in safe error dict if malformed
     try:
         brief_obj = json.loads(cleaned)
-        listings = brief_obj.get("top_listings", [])
+        # Filter non-dict entries immediately — a malformed LLM completion
+        # can put a bare string in this array, and every loop below assumes
+        # dict access (.get()/.pop()) with no guard of its own.
+        listings = [l for l in brief_obj.get("top_listings", []) if isinstance(l, dict)]
         for listing in listings:
-            if isinstance(listing, dict):
-                # Map the cited ref to its exact page URL AND authoritative source,
-                # so the displayed platform always matches the link it opens.
-                ref = listing.pop("ref", None)
-                mapped = ref_map.get(ref) if ref else None
-                if mapped:
-                    listing["url"] = mapped["url"]
-                    listing["source"] = mapped["source"]
-                else:
-                    listing["url"] = None
+            # Map the cited ref to its exact page URL AND authoritative source,
+            # so the displayed platform always matches the link it opens.
+            ref = listing.pop("ref", None)
+            mapped = ref_map.get(ref) if ref else None
+            if mapped:
+                listing["url"] = mapped["url"]
+                listing["source"] = mapped["source"]
+            else:
+                listing["url"] = None
 
         # Resolve max_rent early so budget filter and budget_note can both use it
         max_rent = state["query"].get("max_rent")
@@ -189,7 +214,9 @@ async def synthesis_node(state: RentRadarState) -> RentRadarState:
         #   rent is null/unknown → KEEP (we cannot verify it's over budget;
         #     dropping it silently causes "no listings found" when real
         #     properties exist but their price wasn't in the snippet)
-        if max_rent:
+        # `is not None` rather than truthy: a max_rent of 0 must still filter
+        # (everything is over budget), not silently skip filtering entirely.
+        if max_rent is not None:
             filtered = []
             for l in listings:
                 rv = _to_int_rent(l.get("rent"))
@@ -204,7 +231,6 @@ async def synthesis_node(state: RentRadarState) -> RentRadarState:
         # Adaptive diversity guarantee: when more than one platform contributed,
         # cap each platform at 2 so no single source can dominate the results.
         # When only one platform has data, keep up to 4 from it.
-        listings = [l for l in listings if isinstance(l, dict)]
         distinct_sources = {l.get("source") for l in listings}
         if len(distinct_sources) > 1:
             per_source_cap, seen = 2, {}
@@ -225,7 +251,7 @@ async def synthesis_node(state: RentRadarState) -> RentRadarState:
         # Deterministic budget_note handling:
         # - If we have in-budget listings, remove any LLM budget_note (not needed)
         # - If hard filter removed ALL listings, set an honest budget_note
-        if max_rent:
+        if max_rent is not None:
             if listings:
                 # All remaining listings are in-budget (hard filter ran above)
                 brief_obj.pop("budget_note", None)

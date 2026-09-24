@@ -13,7 +13,11 @@ interface Props {
 export default function ShareButton({ shareId, locality, bhk, maxRent }: Props) {
   const [copied, setCopied] = useState(false);
 
-  const shareUrl = `${typeof window !== "undefined" ? window.location.origin : ""}/s/${shareId}`;
+  // A deterministic env var rather than window.location.origin: the latter
+  // is unavailable during SSR (renders as a bare "/s/..." with no domain —
+  // not a clickable link once pasted into WhatsApp) and differs from the
+  // client's hydrated value, which is a real React hydration mismatch.
+  const shareUrl = `${process.env.NEXT_PUBLIC_SITE_URL ?? "https://rentradar.vercel.app"}/s/${shareId}`;
   const shareText = `${bhk} in ${locality} under ₹${maxRent.toLocaleString("en-IN")} — live rental brief on RentRadar`;
 
   const handleShare = async () => {
