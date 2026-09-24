@@ -43,7 +43,7 @@ Type **"2BHK near Bellandur under ₹25,000"** and RentRadar:
 │                   │                         │
 │       ┌───────────┴──────────┐             │
 │       ▼                      ▼             │
-│  Free sentiment APIs  Anakin Search API    │
+│  Free sentiment APIs  Self-hosted SearXNG   │
 │  · Google News (RSS)  · NoBroker           │
 │  · Hacker News (HN)   · OLX               │
 │                        · Housing.com        │
@@ -63,9 +63,9 @@ Type **"2BHK near Bellandur under ₹25,000"** and RentRadar:
 |--------|------|-----------------|
 | Google News | Google News RSS | Recent rental market coverage |
 | Hacker News | Algolia HN Search API | Tech-worker housing signals |
-| NoBroker | Anakin Search API | Owner-direct listings with prices |
-| OLX | Anakin Search API | Individual rental ad pages |
-| Housing.com | Anakin Search API | Broker listings with deposit info |
+| NoBroker | Self-hosted SearXNG | Owner-direct listings with prices |
+| OLX | Self-hosted SearXNG | Individual rental ad pages |
+| Housing.com | Self-hosted SearXNG | Broker listings with deposit info |
 
 ---
 
@@ -80,7 +80,7 @@ RentRadar/
 │   ├── prompts.py       # System prompt + context builder with ref-map
 │   ├── tools/
 │   │   ├── sentiment_sources.py  # Free APIs (Google News, HN)
-│   │   └── scraper.py            # Anakin Search API (NoBroker, OLX, Housing.com)
+│   │   └── scraper.py            # Self-hosted SearXNG (NoBroker, OLX, Housing.com)
 │   └── requirements.txt
 ├── frontend/
 │   ├── app/
@@ -98,7 +98,10 @@ RentRadar/
 │   ├── package.json
 │   ├── tailwind.config.ts
 │   └── vercel.json
-├── render.yaml           # Render.com backend deployment config
+├── searxng/
+│   ├── Dockerfile        # FROM searxng/searxng, bakes in settings.yml + a real secret
+│   └── settings.yml      # Enables the JSON API, disables the public-instance limiter
+├── render.yaml           # Render.com deployment config (backend + searxng services)
 ├── .env.example
 ├── .gitignore
 └── README.md
@@ -127,7 +130,7 @@ npm run build          # required before e2e — Playwright's webServer reuses t
 npm run test:e2e       # Playwright — one real browser driving a real search end-to-end
 ```
 
-The SSE event-parsing logic used to live entirely inline inside `page.tsx`'s fetch loop — the most fragile part of the app (malformed JSON, network chunks split mid-line, an abort mid-stream) with zero coverage. It's now a pure, extracted module (`lib/searchReducer.ts`) with 19 unit tests. The one Playwright spec (`e2e/search.spec.ts`) drives an actual browser through search → brief renders → share button appears, with the backend response mocked at the network boundary (`page.route`) — this tests real frontend rendering/interaction, not a re-test of the already extensively-tested backend, and never spends real Anakin/Groq credits.
+The SSE event-parsing logic used to live entirely inline inside `page.tsx`'s fetch loop — the most fragile part of the app (malformed JSON, network chunks split mid-line, an abort mid-stream) with zero coverage. It's now a pure, extracted module (`lib/searchReducer.ts`) with 19 unit tests. The one Playwright spec (`e2e/search.spec.ts`) drives an actual browser through search → brief renders → share button appears, with the backend response mocked at the network boundary (`page.route`) — this tests real frontend rendering/interaction, not a re-test of the already extensively-tested backend, and never spends real Groq tokens or hits the search backend.
 
 [GitHub Actions](.github/workflows/ci.yml) runs all of the above — backend pytest, frontend typecheck, Vitest, build, and Playwright — on every push and PR to `master`.
 
@@ -138,7 +141,7 @@ The SSE event-parsing logic used to live entirely inline inside `page.tsx`'s fet
 ### Prerequisites
 - Python 3.11+
 - Node.js 18+
-- [Anakin API Key](https://anakin.ai) — listing search only (NoBroker/OLX/Housing.com)
+- Docker (to run the local SearXNG instance used for listing search)
 - [Groq API Key](https://console.groq.com) — free
 
 ### 1. Clone and configure
@@ -151,12 +154,19 @@ cp .env.example .env
 
 Fill in `.env`:
 ```env
-ANAKIN_API_KEY=your_anakin_api_key
+SEARXNG_URL=http://localhost:8080
 GROQ_API_KEY=your_groq_api_key
 NEXT_PUBLIC_API_URL=http://localhost:8000
 ```
 
-### 2. Start the backend
+### 2. Start SearXNG
+
+```bash
+docker build -t rentradar-searxng ./searxng
+docker run -d -p 8080:8080 --name rentradar-searxng rentradar-searxng
+```
+
+### 3. Start the backend
 
 ```bash
 cd backend
@@ -173,7 +183,7 @@ uvicorn main:app --reload --port 8000
 
 Health check: `http://localhost:8000/health` → `{"status": "ok"}`
 
-### 3. Start the frontend
+### 4. Start the frontend
 
 ```bash
 cd frontend
@@ -187,13 +197,19 @@ Open: `http://localhost:3000`
 
 ## Deployment
 
+`render.yaml` in the repo root defines both services below as a Render Blueprint — connecting the repo and deploying from the Blueprint does both steps at once. To set them up manually instead:
+
+### SearXNG → Render.com
+
+1. Select **New Web Service** → choose this repo → root directory: `searxng` → Runtime: **Docker**
+2. Deploy — note the assigned URL (e.g. `https://rentradar-searxng.onrender.com`)
+
 ### Backend → Render.com
 
-1. Connect your GitHub repo on [render.com](https://render.com)
-2. Select **New Web Service** → choose this repo → root directory: `backend`
-3. Runtime: **Python 3**, Build: `pip install -r requirements.txt`, Start: `uvicorn main:app --host 0.0.0.0 --port $PORT`
-4. Add env vars: `ANAKIN_API_KEY`, `GROQ_API_KEY`
-5. Deploy — note the `https://rentradar-backend.onrender.com` URL
+1. Select **New Web Service** → choose this repo → root directory: `backend`
+2. Runtime: **Python 3**, Build: `pip install -r requirements.txt`, Start: `uvicorn main:app --host 0.0.0.0 --port $PORT`
+3. Add env vars: `SEARXNG_URL` (the SearXNG service's URL from above, no trailing slash), `GROQ_API_KEY`
+4. Deploy — note the backend's own URL
 
 ### Frontend → Vercel
 
@@ -268,7 +284,7 @@ Any channel without its env vars set falls back to a logging stub (see `backend/
 | `DELETE /alerts/{id}` | Deactivate a saved search. |
 | `POST /internal/run-alerts` | Checks every active, confirmed saved search for new matches and fires alerts. Requires an `X-Internal-Secret` header matching `ALERTS_INTERNAL_SECRET` — returns 503 if that env var isn't set. Meant to be called by a scheduler (e.g. a Render Cron Job hitting this every 30–60 min), not by the frontend. |
 
-The matching worker ([alert_worker.py](backend/alert_worker.py)) intentionally skips the LLM synthesis step used by `/search` — it calls the NoBroker/OLX/Housing.com scrapers directly and only alerts on listings with a parsed price at or under budget, keeping each run to Anakin search credits only (no Groq tokens spent on unattended background checks).
+The matching worker ([alert_worker.py](backend/alert_worker.py)) intentionally skips the LLM synthesis step used by `/search` — it calls the NoBroker/OLX/Housing.com scrapers directly and only alerts on listings with a parsed price at or under budget, keeping each run free (SearXNG search only, no Groq tokens spent on unattended background checks).
 
 ---
 
@@ -279,7 +295,7 @@ A few things worth knowing if you're deploying this for real users, not just loc
 - **CORS is scoped to this project's own domains** — `http://localhost:3000` for dev, plus a regex matching only `rentradar*.vercel.app` (Vercel's preview-deployment naming convention) for production. Add any custom domain via the comma-separated `EXTRA_ORIGINS` env var. Earlier this allowed *any* `*.vercel.app` or `*.onrender.com` app with credentials — that's been tightened.
 - **`/docs`, `/redoc`, and `/openapi.json` are disabled.** This API is only ever called by RentRadar's own frontend, not third parties, so a public schema is pure reconnaissance for an attacker.
 - **Rate limiting** via `slowapi`, in-memory (fine for a single instance — move to a Redis-backed store via `Limiter(storage_uri=...)` if this ever scales past one): `/search` 10/10min, `/alerts` create 5/hour, `/feedback` 20/hour, `/alerts/telegram/webhook` 60/min per IP.
-- **Every request body field has a length/range cap** (`SearchRequest.query`, `AlertRequest.locality`/`bhk`/`max_rent`/`target`, `FeedbackRequest.message`/`query`) — rejected at validation time, not accepted then truncated, so oversized payloads never reach Anakin/Groq calls that cost real money.
+- **Every request body field has a length/range cap** (`SearchRequest.query`, `AlertRequest.locality`/`bhk`/`max_rent`/`target`, `FeedbackRequest.message`/`query`) — rejected at validation time, not accepted then truncated, so oversized payloads never reach the search backend or a Groq call that costs real money.
 - **`/alerts/telegram/webhook` requires Telegram's own signature** — `X-Telegram-Bot-Api-Secret-Token` must match `TELEGRAM_WEBHOOK_SECRET`, which Telegram itself echoes back on every call once set via `setWebhook`'s `secret_token` param — not a static placeholder like an earlier WhatsApp-based design would have needed. Email and web push don't need an equivalent: email confirmation is protected by an unguessable per-search token, and web push confirmation is an immediate browser permission grant with no separate step to spoof.
 - **Dependency scan**: `pip-audit` and `npm audit` were run against this repo. Next.js was bumped to 14.2.35 (patches a critical middleware auth-bypass CVE, safe within the same minor version). Some Starlette and Next.js CVEs remain unpatched by design — they require a FastAPI/Next major version bump and don't apply to how this app actually uses those frameworks (no file uploads, no class-based endpoints, no `next/image`, no middleware, no WebSockets). Worth re-checking `pip-audit` / `npm audit` before a real launch, since that calculus can change as the app grows.
 
@@ -293,9 +309,9 @@ Worth knowing: adding the SDK to the frontend grew the shared JS bundle from ~87
 
 `SENTRY_ORG`/`SENTRY_PROJECT`/`SENTRY_AUTH_TOKEN` are optional on top of the DSN — they only enable build-time source map upload for cleaner stack traces; the build succeeds without them either way.
 
-**Proactive status banner** — `backend/source_health.py` tracks whether the last real search had every data source fail (Anakin credits exhausted, network down, etc.) and `GET /health` reports it. The frontend polls this every 60s and shows a dismissible banner *before* anyone even searches, rather than only after they've typed a query and waited. Deliberately does not proactively ping Anakin to check status — that would cost real search credits just to answer "are we healthy," which would make the exact problem this exists to catch worse. This means a fresh restart assumes healthy until the first real search proves otherwise — a decision made for zero added cost, not an oversight.
+**Proactive status banner** — `backend/source_health.py` tracks whether the last real search had every data source fail (search backend down, network down, etc.) and `GET /health` reports it. The frontend polls this every 60s and shows a dismissible banner *before* anyone even searches, rather than only after they've typed a query and waited. Deliberately does not proactively ping the search backend to check status — extra polling load is exactly the kind of thing that gets a self-hosted SearXNG instance rate-limited by the upstream engines it queries, which would make the exact problem this exists to catch worse. This means a fresh restart assumes healthy until the first real search proves otherwise — a decision made for zero added risk, not an oversight.
 
-**Search caching** — `backend/query_cache.py` is a 15-minute in-memory cache keyed on normalized `(locality, bhk, max_rent)`. Two identical searches within that window mean the second one skips Anakin and Groq entirely and replays the first's result — verified live: a repeat search dropped from ~9.3s to ~0.17s with zero additional Anakin/Groq HTTP calls in the logs. Only genuinely successful briefs are ever cached — `sources_unavailable` and `synthesis_failed` results are never cached, since caching a failure would keep serving a stale outage message for the full 15 minutes even after Anakin recovers, directly undermining `source_health.py`'s recovery detection above.
+**Search caching** — `backend/query_cache.py` is a 15-minute in-memory cache keyed on normalized `(locality, bhk, max_rent)`. Two identical searches within that window mean the second one skips the search backend and Groq entirely and replays the first's result — verified live: a repeat search dropped from ~9.3s to ~0.17s with zero additional HTTP calls in the logs. Only genuinely successful briefs are ever cached — `sources_unavailable` and `synthesis_failed` results are never cached, since caching a failure would keep serving a stale outage message for the full 15 minutes even after the search backend recovers, directly undermining `source_health.py`'s recovery detection above.
 
 **Product analytics** — `frontend/lib/analytics.ts`, no-op until `NEXT_PUBLIC_UMAMI_WEBSITE_ID` is set. Wired to [Umami](https://umami.is) specifically: genuinely open-source (MIT, self-hostable for free on a cheap VPS), and its Cloud tier is a real permanent free plan — not a 14-day trial. Tracks `search_submitted`, `brief_rendered`, `alert_channel_clicked` (which of Telegram/Browser/Email gets picked), and `share_clicked` (native share sheet, clipboard copy, or the direct WhatsApp link, tracked separately). No client SDK — a plain `fetch` POST to Umami's `/api/send` — so this is zero bundle cost whether or not it's configured, confirmed via build output rather than assumed.
 

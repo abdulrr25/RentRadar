@@ -1,8 +1,8 @@
 """
-Short-TTL cache for identical searches — every search costs real Anakin
-search credits (this project has hit 0 balance once already) plus Groq
-tokens, and two people searching "2BHK Bellandur under 25k" seconds apart
-currently pay that cost twice for an identical result.
+Short-TTL cache for identical searches — every search costs real Groq
+tokens (and puts load on the self-hosted SearXNG instance), and two people
+searching "2BHK Bellandur under 25k" seconds apart currently pay that cost
+twice for an identical result.
 
 Deliberately in-memory (a plain dict), matching the project's existing
 single-instance assumptions (same as the rate limiter) — no new infra for
@@ -10,7 +10,7 @@ what's meant to be a cheap first pass, not a durable cache.
 
 Deliberately does NOT cache sources_unavailable / synthesis_failed briefs —
 caching a failure would keep serving a stale "sources down" message for the
-full TTL even after Anakin recovers, directly undermining source_health.py's
+full TTL even after the search backend recovers, directly undermining source_health.py's
 recovery detection (which relies on the next real search actually retrying).
 """
 

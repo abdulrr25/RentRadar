@@ -1,7 +1,7 @@
 /**
  * Next.js route handler — proxies backend health status to the browser.
  * Used by the frontend to show a proactive banner when live sources are
- * degraded (e.g. Anakin credits exhausted), before anyone even searches.
+ * degraded (e.g. the search backend is down), before anyone even searches.
  */
 
 import { NextRequest } from "next/server";

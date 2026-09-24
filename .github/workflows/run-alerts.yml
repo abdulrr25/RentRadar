@@ -3,8 +3,9 @@ name: Run saved-search alerts
 # Nothing was calling POST /internal/run-alerts — saved-search alerts (the
 # "notify me the moment a new match appears" feature) were being accepted
 # and confirmed, but never actually checked or sent. This is the scheduler
-# that was missing. Runs once daily to keep Anakin credit spend predictable
-# (3 credits per active saved search, per run).
+# that was missing. Runs once daily to keep load on the self-hosted SearXNG
+# instance predictable — one search backend request per active saved search,
+# per run.
 on:
   schedule:
     - cron: "23 2 * * *"  # ~08:00 IST daily
@@ -49,8 +50,8 @@ jobs:
           fi
           echo "Configuration present. Target: $BACKEND_API_URL"
 
-      # /health costs no Anakin credits, so a wrong URL is caught for free
-      # instead of by a failed alert run. Doubles as a warm-up: Render's free
+      # /health is free to call, so a wrong URL is caught for free instead
+      # of by a failed alert run. Doubles as a warm-up: Render's free
       # tier sleeps when idle, and this stops the real call below racing a
       # cold start.
       - name: Preflight — backend reachable

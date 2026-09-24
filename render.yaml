@@ -7,7 +7,12 @@ services:
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
     envVars:
-      - key: ANAKIN_API_KEY
+      # Public URL of the rentradar-searxng service below, with no trailing
+      # slash (e.g. https://rentradar-searxng.onrender.com). Fill this in
+      # once that service has deployed and Render has assigned it a URL —
+      # not auto-wired here since the URL depends on Render's name-collision
+      # suffixing at creation time.
+      - key: SEARXNG_URL
         sync: false
       - key: GROQ_API_KEY
         sync: false
@@ -47,3 +52,14 @@ services:
       - key: SENTRY_ENVIRONMENT
         sync: false
     healthCheckPath: /health
+
+  # Self-hosted metasearch engine, replacing the paid Anakin Search API for
+  # NoBroker/OLX/Housing.com listing search (see backend/tools/scraper.py).
+  # Free, but on Render's free plan this sleeps after inactivity like the
+  # backend does — first search after idle will be slower while both wake up.
+  - type: web
+    name: rentradar-searxng
+    runtime: docker
+    plan: free
+    rootDir: searxng
+    dockerfilePath: ./Dockerfile

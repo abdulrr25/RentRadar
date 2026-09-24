@@ -152,8 +152,8 @@ async def search(request: Request, body: SearchRequest):
 
             cached = query_cache.get(parsed["locality"], parsed["bhk"], parsed["max_rent"])
             if cached is not None:
-                # Identical search within the last 15 min — skip Anakin/Groq
-                # entirely. Only successful briefs are ever cached (see
+                # Identical search within the last 15 min — skip the search
+                # backend and Groq entirely. Only successful briefs are ever cached (see
                 # query_cache.py), so this can never replay a stale outage.
                 for source, status in cached["source_statuses"]:
                     yield f"data: {json.dumps({'type': 'source_complete', 'source': source, 'status': status})}\n\n"
@@ -244,8 +244,8 @@ async def health():
 
     Always answers HTTP 200, whatever the body says. render.yaml points
     healthCheckPath here, and Render restarts an instance that returns
-    non-2xx — so signalling "Anakin is down" with a 5xx would take the whole
-    service offline over a third-party outage it cannot fix by restarting.
+    non-2xx — so signalling "the search backend is down" with a 5xx would
+    take the whole service offline over an outage a restart cannot fix.
     The status lives in the body; the status code only means "the process is
     up and answering".
 
@@ -254,7 +254,7 @@ async def health():
     evidence either way — reporting "ok" there would be a guess presented as
     a fact, and would let a monitor miss a real outage on a new instance.
     """
-    missing = [k for k in ("ANAKIN_API_KEY", "GROQ_API_KEY") if not os.getenv(k)]
+    missing = [k for k in ("SEARXNG_URL", "GROQ_API_KEY") if not os.getenv(k)]
     if missing:
         return {"status": "degraded", "reason": "Required configuration is missing", "missing_env": missing}
 
@@ -263,11 +263,6 @@ async def health():
         "status": source_status["status"],
         "service": "RentRadar",
         "last_result_at": source_status["last_result_at"],
-        # Surfaced even when status is "ok": credit exhaustion can be partial,
-        # in which case searches still succeed with fewer results. Without
-        # this there'd be no way to diagnose "why did results get worse"
-        # short of reading logs.
-        "credit_exhausted": source_status["credit_exhausted"],
     }
     if source_status["status"] == "degraded":
         body["reason"] = source_status["reason"]

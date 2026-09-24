@@ -113,8 +113,9 @@ export default function TermsPage() {
 
           <Section title="7. Service availability">
             <p>
-              The Service depends on third-party APIs (Anakin, Groq) that may be rate-limited, temporarily
-              unavailable, or discontinued. We do not guarantee uninterrupted availability and may modify, suspend,
+              The Service depends on a self-hosted search backend and third-party APIs (Groq) that may be
+              rate-limited, temporarily unavailable, or discontinued. We do not guarantee uninterrupted
+              availability and may modify, suspend,
               or discontinue any part of the Service at any time without prior notice.
             </p>
           </Section>

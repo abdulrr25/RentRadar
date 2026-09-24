@@ -13,8 +13,8 @@ def setup_function():
 def test_starts_unknown_not_healthy():
     # The whole point of the three-valued state: before any search has run
     # we have no evidence sources work. Claiming "ok" here would let an
-    # uptime monitor read a freshly restarted instance as fine while Anakin
-    # was completely down.
+    # uptime monitor read a freshly restarted instance as fine while the
+    # search backend was completely down.
     status = source_health.get_status()
     assert status["status"] == "unknown"
     assert status["degraded"] is False
@@ -39,16 +39,16 @@ def test_goes_unknown_once_the_last_result_is_stale():
 def test_degraded_stays_degraded_even_when_stale():
     # A known outage must not decay into "unknown" — that would quietly
     # downgrade a real problem into a shrug.
-    source_health.mark_degraded("Anakin credits exhausted")
+    source_health.mark_degraded("search backend down")
     source_health._state["last_result_at"] = int(time.time()) - source_health.FRESH_FOR_SECONDS - 60
     assert source_health.get_status()["status"] == "degraded"
 
 
 def test_mark_degraded_sets_reason_and_timestamp():
-    source_health.mark_degraded("Anakin credits exhausted")
+    source_health.mark_degraded("search backend down")
     status = source_health.get_status()
     assert status["degraded"] is True
-    assert status["reason"] == "Anakin credits exhausted"
+    assert status["reason"] == "search backend down"
     assert status["since"] is not None
 
 

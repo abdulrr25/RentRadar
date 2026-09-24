@@ -1,17 +1,16 @@
 """
-Tracks whether the live data sources (Anakin) are currently healthy, based on
-real search outcomes rather than a separate proactive health-check call —
-Anakin's search API costs real credits per call (this project has hit 0
-balance once already), so polling it just to answer "are we healthy" would
-make the exact problem it's meant to catch worse. Instead, agent.py reports
+Tracks whether the live listing search (SearXNG + the portal scrapers) is
+currently healthy, based on real search outcomes rather than a separate
+proactive health-check call. Reporting in after every real search instead of
+polling means a status check never adds load of its own — agent.py reports
 in after every real search, and /health reflects that.
 
 The cost of that tradeoff is that this module can be genuinely ignorant:
 right after a restart, or during a quiet stretch, nothing has reported in.
 It used to answer "healthy" in that situation, which is a guess dressed up
 as a fact — an uptime monitor watching /health would see a freshly
-restarted instance as fine even while Anakin was completely down. So the
-state is now three-valued: healthy, degraded, or unknown.
+restarted instance as fine even while the search backend was completely
+down. So the state is now three-valued: healthy, degraded, or unknown.
 """
 
 import time
@@ -26,34 +25,7 @@ _state = {
     "reason": None,
     "since": None,
     "last_result_at": None,
-    "credit_exhausted": False,
 }
-
-
-def mark_credit_exhausted() -> bool:
-    """
-    Record that at least one Anakin API reported exhausted credits.
-
-    Tracked separately from `degraded` on purpose: credit exhaustion can be
-    partial. Anakin's search API now backs only the three listing portals
-    (NoBroker, OLX, Housing.com) — HN/Google News run on free APIs outside
-    Anakin entirely — but a single portal's search call can still fail on
-    its own while the other two succeed, and results quietly get worse
-    without a total outage. That still needs to page the owner (it costs
-    money to fix), but it does not warrant telling users the site is
-    broken while listings are still coming back.
-
-    Returns True only on the transition into exhaustion, so callers page
-    once rather than on every subsequent search.
-    """
-    was_clear = not _state["credit_exhausted"]
-    _state["credit_exhausted"] = True
-    return was_clear
-
-
-def clear_credit_exhausted() -> None:
-    """Called after a search where no source reported a credit problem."""
-    _state["credit_exhausted"] = False
 
 
 def mark_degraded(reason: str) -> bool:
@@ -83,7 +55,6 @@ def reset() -> None:
     _state["reason"] = None
     _state["since"] = None
     _state["last_result_at"] = None
-    _state["credit_exhausted"] = False
 
 
 def get_status() -> dict:
@@ -115,5 +86,4 @@ def get_status() -> dict:
         "reason": _state["reason"],
         "since": _state["since"],
         "last_result_at": last,
-        "credit_exhausted": _state["credit_exhausted"],
     }

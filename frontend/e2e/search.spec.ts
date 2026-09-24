@@ -6,7 +6,7 @@ import { test, expect } from "@playwright/test";
  * page.tsx/searchReducer.ts — not a unit test with a fake event object.
  *
  * The backend response is mocked at the network boundary (page.route) so
- * this never depends on or spends real Anakin/Groq credits — this is a
+ * this never depends on or spends real Groq tokens, or hits the search backend — this is a
  * frontend rendering/interaction test, not a re-test of the already
  * extensively-tested backend pipeline.
  */

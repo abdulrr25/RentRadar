@@ -35,7 +35,7 @@ def _sse_events(text: str):
 # ── /health ──────────────────────────────────────────────────────────────────
 
 def test_health_ok_when_env_vars_present(client, monkeypatch):
-    monkeypatch.setenv("ANAKIN_API_KEY", "x")
+    monkeypatch.setenv("SEARXNG_URL", "http://localhost:8080")
     monkeypatch.setenv("GROQ_API_KEY", "y")
     res = client.get("/health")
     assert res.status_code == 200
@@ -43,15 +43,15 @@ def test_health_ok_when_env_vars_present(client, monkeypatch):
 
 
 def test_health_degraded_when_env_vars_missing(client, monkeypatch):
-    monkeypatch.delenv("ANAKIN_API_KEY", raising=False)
+    monkeypatch.delenv("SEARXNG_URL", raising=False)
     monkeypatch.delenv("GROQ_API_KEY", raising=False)
     res = client.get("/health")
     assert res.json()["status"] == "degraded"
-    assert "ANAKIN_API_KEY" in res.json()["missing_env"]
+    assert "SEARXNG_URL" in res.json()["missing_env"]
 
 
 def test_health_degraded_when_sources_failing(client, monkeypatch):
-    monkeypatch.setenv("ANAKIN_API_KEY", "x")
+    monkeypatch.setenv("SEARXNG_URL", "http://localhost:8080")
     monkeypatch.setenv("GROQ_API_KEY", "y")
     source_health.mark_degraded("all sources failed in a real search")
     res = client.get("/health")
@@ -61,11 +61,12 @@ def test_health_degraded_when_sources_failing(client, monkeypatch):
 
 
 def test_health_unknown_on_a_fresh_instance(client, monkeypatch):
-    monkeypatch.setenv("ANAKIN_API_KEY", "x")
+    monkeypatch.setenv("SEARXNG_URL", "http://localhost:8080")
     monkeypatch.setenv("GROQ_API_KEY", "y")
     # Just-restarted state: no search has reported in yet. Answering "ok"
-    # here would let a monitor read a new instance as fine while Anakin is
-    # down — the failure mode this three-valued status exists to prevent.
+    # here would let a monitor read a new instance as fine while the search
+    # backend is down — the failure mode this three-valued status exists to
+    # prevent.
     source_health.reset()
     res = client.get("/health")
     assert res.status_code == 200
@@ -77,17 +78,17 @@ def test_health_always_returns_200_even_when_degraded(client, monkeypatch):
     # render.yaml uses healthCheckPath: /health, and Render restarts an
     # instance returning non-2xx. Signalling a third-party outage with a 5xx
     # would take the service down over something a restart cannot fix.
-    monkeypatch.setenv("ANAKIN_API_KEY", "x")
+    monkeypatch.setenv("SEARXNG_URL", "http://localhost:8080")
     monkeypatch.setenv("GROQ_API_KEY", "y")
-    source_health.mark_degraded("Anakin credits exhausted")
+    source_health.mark_degraded("all sources failed in a real search")
     assert client.get("/health").status_code == 200
 
-    monkeypatch.delenv("ANAKIN_API_KEY", raising=False)
+    monkeypatch.delenv("SEARXNG_URL", raising=False)
     assert client.get("/health").status_code == 200
 
 
 def test_health_recovers_after_mark_healthy(client, monkeypatch):
-    monkeypatch.setenv("ANAKIN_API_KEY", "x")
+    monkeypatch.setenv("SEARXNG_URL", "http://localhost:8080")
     monkeypatch.setenv("GROQ_API_KEY", "y")
     source_health.mark_degraded("temporary failure")
     source_health.mark_healthy()

@@ -4,7 +4,7 @@ LangGraph agent for RentRadar.
 Graph:
   parallel_fetch_node  →  synthesis_node  →  END
 
-Node 1 fires 5 async fetches simultaneously (free sentiment APIs + Anakin search).
+Node 1 fires 5 async fetches simultaneously (free sentiment APIs + SearXNG search).
 Node 2 sends all raw data to Groq (gpt-oss-120b) for structured synthesis.
 Groq is free — sign up at console.groq.com.
 """
@@ -49,7 +49,7 @@ async def parallel_fetch_node(state: RentRadarState) -> RentRadarState:
     """
     Fires all 5 data fetches simultaneously.
     - Free APIs:   Google News, Hacker News
-    - Anakin API:  NoBroker, OLX, Housing.com
+    - SearXNG:     NoBroker, OLX, Housing.com
 
     Uses return_exceptions=True so a single timeout never kills the pipeline.
     """
@@ -107,60 +107,25 @@ async def synthesis_node(state: RentRadarState) -> RentRadarState:
     raw = state["raw_data"]
     query_desc = f"{state['query'].get('bhk', '?')} in {state['query'].get('locality', 'Bangalore')}"
 
-    exhausted_sources = [
-        item.get("source", "unknown")
-        for item in raw
-        if isinstance(item, dict) and item.get("credit_exhausted")
-    ]
     all_failed = bool(raw) and all(item.get("status") != "ok" for item in raw)
 
-    # Credit exhaustion is checked independently of whether EVERY source
-    # failed. It used to be nested inside the total-outage branch, so a
-    # partial exhaustion — plausible if Anakin's search and wire APIs bill
-    # from separate pools — degraded results silently: some sources still
-    # returned data, the code took the healthy path, and nobody was told
-    # that the thing costing money had run out.
-    if exhausted_sources:
-        if source_health.mark_credit_exhausted():
-            scope = (
-                "every live data source"
-                if all_failed
-                else f"some data sources ({', '.join(exhausted_sources)})"
-            )
-            consequence = (
-                'Users will keep seeing a "sources unavailable" message until this is fixed.'
-                if all_failed
-                else "Searches still work but return fewer results than they should, with no "
-                     "visible error — so this will not be obvious from the site itself."
-            )
-            asyncio.create_task(send_admin_alert(
-                "Urgent- RentRadar Credits expired",
-                f'A user just searched for "{query_desc}" and {scope} failed with an error '
-                "indicating the Anakin API credits have run out.\n\n"
-                "Action needed: recharge your Anakin account balance, or rotate "
-                f"ANAKIN_API_KEY if you've switched keys.\n\n{consequence}",
-            ))
-    else:
-        source_health.clear_credit_exhausted()
-
-    # If every data source failed (e.g. Anakin quota exhausted / network down),
-    # don't waste an LLM call producing a misleading "no listings" brief — tell
-    # the user the sources are unavailable so the UI can show an honest message.
+    # If every data source failed (search backend or network down), don't
+    # waste an LLM call producing a misleading "no listings" brief — tell
+    # the user the sources are unavailable so the UI can show an honest
+    # message.
     if all_failed:
         is_new_outage = source_health.mark_degraded(
-            "Anakin credits exhausted" if exhausted_sources else
-            "All live data sources failed on the last search — likely Anakin "
-            "credits exhausted or a network issue."
+            "All live data sources failed on the last search — likely the "
+            "search backend or a network issue."
         )
         # Only page the admin on the moment of transition into an outage, not
-        # on every subsequent search while it's still down. A credit-specific
-        # alert has already gone out above, so this covers the other causes.
-        if is_new_outage and not exhausted_sources:
+        # on every subsequent search while it's still down.
+        if is_new_outage:
             asyncio.create_task(send_admin_alert(
                 "RentRadar alert: all live data sources are down",
                 f'A user just searched for "{query_desc}" and every live data source failed.\n\n'
-                "This could be Anakin credits running out or a network/API outage — check "
-                "the Render logs for the exact error.\n\n"
+                "Check the Render logs for the exact error — could be the SearXNG "
+                "instance being rate-limited upstream, or a network/API outage.\n\n"
                 'Users will keep seeing a "sources unavailable" message until this is fixed.',
             ))
         return {
@@ -169,8 +134,7 @@ async def synthesis_node(state: RentRadarState) -> RentRadarState:
                 "sources_unavailable": True,
                 "locality": state["query"].get("locality", "Bangalore"),
                 "message": "All live data sources are currently unavailable. "
-                           "This usually means the Anakin API credits are exhausted "
-                           "or the network is down. Please try again shortly.",
+                           "Please try again shortly.",
             }),
         }
 

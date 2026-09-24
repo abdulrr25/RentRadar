@@ -15,7 +15,7 @@ RESEND_API_URL = "https://api.resend.com/emails"
 
 EMAIL_LIVE = bool(os.getenv("RESEND_API_KEY"))
 
-# Where operational alerts (e.g. Anakin credits exhausted) go — not a
+# Where operational alerts (e.g. all live data sources down) go — not a
 # user-facing channel, just the site owner's inbox.
 ADMIN_ALERT_EMAIL = os.getenv("ADMIN_ALERT_EMAIL", "abdulr6503@gmail.com")
 

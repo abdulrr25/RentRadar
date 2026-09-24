@@ -4,8 +4,8 @@ Saved-search matching worker.
 Deliberately does NOT go through agent.py's LLM synthesis — alerts only need
 "is there a new listing under budget", not a narrative brief, so this calls
 the portal scrapers directly and skips the Groq call entirely. That keeps
-alert runs cheap (Anakin search credits only, no LLM tokens) since this is
-meant to run unattended on a schedule across every saved search.
+alert runs free (SearXNG search only, no LLM tokens) since this is meant
+to run unattended on a schedule across every saved search.
 
 Triggered by POST /internal/run-alerts (see main.py), called once daily by
 the "Run saved-search alerts" GitHub Actions workflow — nothing here runs

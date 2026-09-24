@@ -1,0 +1,23 @@
+# Minimal override on top of SearXNG's packaged defaults — see
+# https://docs.searxng.org/admin/settings/settings.html for the full schema.
+# This instance is private (only RentRadar's backend calls it), so the two
+# things that matter are: enable the JSON API (off by default for public
+# instances) and disable the bot-detection limiter (meant for public
+# instances fending off abuse, not a single known caller).
+use_default_settings: true
+
+general:
+  instance_name: "RentRadar SearXNG"
+
+search:
+  safe_search: 0
+  formats:
+    - html
+    - json
+
+server:
+  # Overridden at runtime by the SEARXNG_SECRET env var (see Dockerfile) —
+  # this placeholder is never actually used.
+  secret_key: "changeme"
+  limiter: false
+  image_proxy: false
