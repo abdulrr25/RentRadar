@@ -21,3 +21,19 @@ server:
   secret_key: "changeme"
   limiter: false
   image_proxy: false
+
+# use_default_settings only enables a small general-web subset (duckduckgo,
+# brave, google cse) — verified live: all three were already rate-limited
+# or timing out from Render's shared IP within minutes of first deploy,
+# leaving zero results for every search. These plain engines exist in
+# SearXNG's catalog but are disabled by default; turning them on widens the
+# odds that at least one responds on a given request.
+engines:
+  - name: google
+    disabled: false
+  - name: bing
+    disabled: false
+  - name: qwant
+    disabled: false
+  - name: yahoo
+    disabled: false
