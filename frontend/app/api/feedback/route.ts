@@ -10,11 +10,17 @@ export const dynamic = "force-dynamic";
 export async function POST(req: NextRequest) {
   const body = await req.json();
   const apiUrl = process.env.BACKEND_API_URL ?? "http://localhost:8000";
+  // The backend's rate limiter keys off this — otherwise it sees this
+  // route's own outbound connection for every visitor (see backend/main.py).
+  const forwardedFor = req.headers.get("x-forwarded-for") ?? req.headers.get("x-real-ip");
 
   try {
     const upstream = await fetch(`${apiUrl}/feedback`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        ...(forwardedFor ? { "X-Forwarded-For": forwardedFor } : {}),
+      },
       body: JSON.stringify(body),
       signal: AbortSignal.timeout(10_000),
     });

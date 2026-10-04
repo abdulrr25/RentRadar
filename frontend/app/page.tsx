@@ -54,10 +54,35 @@ export default function Home() {
         signal: controller.signal,
       });
 
+      // Anything that isn't the SSE stream our own route handler produces —
+      // a rate limit, a crash, or a platform-level timeout response that
+      // never even reached that handler — used to flow into the loop below
+      // anyway. The parser only recognizes "data: " lines, finds none, and
+      // the search just goes silent: no brief, no error, loading simply
+      // stops. That reads as the product doing nothing, not as a clear
+      // failure. Catch it here instead, before it ever reaches the parser.
+      const contentType = res.headers.get("content-type") ?? "";
+      if (!res.ok || !contentType.includes("text/event-stream")) {
+        let message = "Something went wrong while running that search. Please try again.";
+        if (res.status === 429) {
+          message = "RentRadar is getting a lot of searches right now — please wait a few minutes and try again.";
+        } else {
+          try {
+            const data = await res.json();
+            if (typeof data?.message === "string") message = data.message;
+          } catch {
+            // Not JSON (e.g. an HTML platform error page) — keep the generic message.
+          }
+        }
+        dispatch({ type: "error", message });
+        return;
+      }
+
       if (!res.body) throw new Error("Response body is empty.");
       const reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
+      let gotTerminalEvent = false;
 
       while (true) {
         const { done, value } = await reader.read();
@@ -67,8 +92,20 @@ export default function Home() {
         buffer = remainder;
         for (const line of lines) {
           const event = parseSSELine(line);
-          if (event) dispatch(event);
+          if (event) {
+            dispatch(event);
+            if (event.type === "brief" || event.type === "error") gotTerminalEvent = true;
+          }
         }
+      }
+
+      // The stream ended (server closed the connection) without ever
+      // sending a brief or an error — belt-and-suspenders for any future
+      // server-side path that closes the stream early. Otherwise this is
+      // the same silent-failure outcome the content-type check above
+      // guards against, just reached via a different road.
+      if (!gotTerminalEvent && abortRef.current === controller) {
+        dispatch({ type: "error", message: "No response came back from that search. Please try again." });
       }
     } catch (err: any) {
       // A newer search already superseded this one (its `reset` already

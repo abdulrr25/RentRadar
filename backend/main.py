@@ -91,7 +91,26 @@ app = FastAPI(
 
 # Rate limiting — in-memory (single-instance deployment; move to a Redis
 # backend via slowapi's storage_uri if this ever scales past one instance).
-limiter = Limiter(key_func=get_remote_address)
+#
+# Keyed on X-Forwarded-For, not the raw socket address: every request here
+# arrives server-to-server from the Next.js host (it proxies the browser's
+# call), so request.client.host is the SAME address — the Next.js
+# deployment's own egress — for every visitor. Keying on that collapses the
+# "10 searches / 10 minutes" limit into one budget shared by the entire
+# site's traffic instead of one per visitor; a handful of people searching
+# back-to-back locks everyone else out for the next 10 minutes with no
+# visible explanation. The Next.js proxy (see frontend/app/api/search/
+# route.ts) forwards the real caller's IP in X-Forwarded-For; fall back to
+# the direct connection for anything that calls this API without going
+# through that proxy (local dev, tests, curl).
+def _client_ip(request: Request) -> str:
+    xff = request.headers.get("x-forwarded-for")
+    if xff:
+        return xff.split(",")[0].strip()
+    return get_remote_address(request)
+
+
+limiter = Limiter(key_func=_client_ip)
 app.state.limiter = limiter
 app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
