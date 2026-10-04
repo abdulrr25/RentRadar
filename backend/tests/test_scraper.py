@@ -134,9 +134,83 @@ def test_generic_listing_page_detects_nobroker_any_bhk_locality_page():
     assert _is_generic_listing_page(url, title, "nobroker.in") is True
 
 
-def test_generic_listing_page_detects_trailing_listing_count_regardless_of_domain():
-    # The portal's own "<N>+" count is a strong signal on its own, even when
-    # the URL shape itself doesn't match any known bad pattern for that
-    # domain — a page the URL-only checks would have let through.
-    url = "https://www.nobroker.in/property/rent/bangalore/some-building-xyz123"
-    assert _is_generic_listing_page(url, "Flats available near Bellandur 85+", "nobroker.in") is True
+def test_generic_listing_page_detects_nobroker_insite_search_page():
+    # NoBroker's own in-site search lives under /property/rent/bangalore/... —
+    # it IS under /property/ but is a results page, not one unit, so the
+    # allowlist's (?!rent/) must exclude it.
+    url = "https://www.nobroker.in/property/rent/bangalore/some-area?searchParam=abc"
+    assert _is_generic_listing_page(url, "whatever", "nobroker.in") is True
+
+
+# ── gaps found in the live-corpus audit (10 localities x 3 portals) ──────────
+
+def test_generic_listing_page_detects_olx_bare_geo_page():
+    # Captured live: a bare locality page with no category — slipped through
+    # the old blocklist entirely (no /q- and no _c<id>).
+    url = "https://www.olx.in/bellandur_g5313788"
+    assert _is_generic_listing_page(url, "Bellandur Free classifieds - OLX India", "olx.in") is True
+
+
+def test_generic_listing_page_detects_olx_category_page_with_query_string():
+    # Captured live: a category page with a trailing ?filter= — the old
+    # "_c\d+(?:/|$)" anchor was defeated by the "?".
+    url = "https://www.olx.in/bellandur_g5313788/for-rent-houses-apartments_c1723?filter=rooms_eq_2"
+    assert _is_generic_listing_page(url, "2 BHK for rent", "olx.in") is True
+
+
+def test_generic_listing_page_detects_olx_pg_guest_house_page():
+    # Captured live: a PG / shared-room browse page — not a flat at all.
+    url = "https://www.olx.in/bellandur_g5313788/pg-guest-houses_c1449?filter=subtype_eq_roommate"
+    assert _is_generic_listing_page(url, "PG in Bellandur", "olx.in") is True
+
+
+def test_generic_listing_page_false_for_olx_new_format_item():
+    # Captured live: OLX's current single-ad shape. Note "c1723" appears in
+    # the slug with hyphens, not "_c1723" — it must not be mistaken for a
+    # category page.
+    url = "https://www.olx.in/item/for-rent-houses-apartments-c1723-2-bhk-flats-apartments-1180-sq-ft-in-bellandur"
+    assert _is_generic_listing_page(url, "2 BHK Flats & Apartments", "olx.in") is False
+
+
+def test_generic_listing_page_false_for_olx_item_under_locale_prefix():
+    url = "https://www.olx.in/en-in/item/for-rent-houses-apartments-c1723-1-bhk-flats-apartments-650-sq-ft"
+    assert _is_generic_listing_page(url, "1 BHK", "olx.in") is False
+
+
+def test_generic_listing_page_detects_nobroker_house_locality_page():
+    # Captured live: the old blocklist only matched "flats", so the "house"
+    # variant of the same locality browse page was wrongly kept.
+    url = "https://www.nobroker.in/2-bhk-house-for-rent-in-indira-nagar-bangalore"
+    assert _is_generic_listing_page(url, "2 BHK House for Rent in Indiranagar", "nobroker.in") is True
+
+
+def test_generic_listing_page_false_for_genuine_nobroker_property():
+    # Captured live: a genuine individual property, always under /property/.
+    url = "https://www.nobroker.in/property/2-bhk-apartment-for-rent-in-bellandur-bangalore-for-rs-23000/8aa9b"
+    assert _is_generic_listing_page(url, "2 BHK Apartment for Rent in Bellandur", "nobroker.in") is False
+
+
+def test_generic_listing_page_detects_housing_project_rpid_page():
+    # Captured live: a whole-building rental page (named by project, no unit
+    # specifics, "rpid" = project id, URL is /rent-<slug> not /rent/<id>-).
+    url = "https://housing.com/rent-assetz-east-point-for-rent-in-bellandur-bengaluru-rpid-AG61eAH0"
+    assert _is_generic_listing_page(url, "Assetz East Point", "housing.com") is True
+
+
+def test_generic_listing_page_detects_housing_overview_and_flatmates_pages():
+    overview = "https://housing.com/bellandur-bengaluru-overview-P29di09q225s3j6s1"
+    flatmates = "https://housing.com/flatmates/shared-accomodation-for-rent-in-bellandur-bengaluru-P29"
+    assert _is_generic_listing_page(overview, "Bellandur Overview", "housing.com") is True
+    assert _is_generic_listing_page(flatmates, "Shared accommodation", "housing.com") is True
+
+
+def test_title_fallback_applies_only_to_domains_without_an_allowlist():
+    # The title heuristics are a defensive net for a hypothetical future
+    # source with no URL allowlist — exercised here via an unknown domain.
+    assert _is_generic_listing_page(
+        "https://example.com/some-results-page", "2 BHK Flats for Rent in Bellandur 120+", "example.com"
+    ) is True
+    # ...and a price in the title marks a specific listing, so it's kept.
+    assert _is_generic_listing_page(
+        "https://example.com/listing", "2 BHK Flat for Rent in Bellandur for Rs 25,000", "example.com"
+    ) is False

@@ -43,45 +43,57 @@ def _matches_domain(url: str, expected_domain: str) -> bool:
     return netloc == expected_domain or netloc.endswith("." + expected_domain)
 
 
-# Per-portal URL shape of a locality/city/project-wide results page, or a
-# wrong-transaction-type page (a for-sale page surfacing in a rent search) —
-# anything that is NOT one specific flat. Seen live:
-#   nobroker.in/2bhk-flats-for-rent-in-bellandur_bangalore         whole-locality page, a
-#                                                                   dozen+ different prices on it
-#   nobroker.in/2bhk-flats-for-rent-in-adarsh-rosewood-...-prjtl   whole-project page ("197+" listings)
-#   nobroker.in/2bhk-flats-for-sale-in-...                         for sale, not rent
-#   nobroker.in/property/rent/bangalore/{area}?searchParam=...     re-runs a location filter
-#   housing.com/in/buy/...                                         for sale, not rent
-#   olx.in/real-estate_c3/q-2-bhk-flats                            category/query browse page
-# A genuine Housing.com listing (captured live, see test_scraper.py) instead
-# looks like /rent/19960137-750-sqft-1-bhk-apartment-on-rent-in-kadubeesanahalli-bengaluru
-# — a numeric listing ID up front, not a bare "<bhk> flats for rent in
-# <place>" template — so for housing.com the ID prefix is required rather
-# than pattern-matching the bad shape.
-_GENERIC_URL_PATTERNS = {
-    # \b not a literal leading "-": NoBroker's "any BHK" variant of this same
-    # page (.../flats-for-rent-in-bellandur_bangalore) has "flats" right at
-    # the start of the path, with no "2bhk-" prefix before it to anchor on.
-    "nobroker.in": re.compile(r"\bflats-for-(?:rent|sale)-(?:in|near)-|searchparam=", re.IGNORECASE),
-    "housing.com": re.compile(r"/(?:in/)?buy/", re.IGNORECASE),
-    "olx.in": re.compile(r"/q-|_c\d+(?:/|$)", re.IGNORECASE),
+# Two portals have a well-defined genuine-single-listing URL shape, and
+# ONLY that shape is a real listing — every other path on the domain is a
+# locality/city/project browse page. For these, an allowlist (keep only the
+# genuine shape) is far more robust than trying to blocklist every browse
+# variant. Verified against a live corpus of ~380 URLs/portal across 8
+# localities:
+#   housing.com genuine: /rent/19960137-750-sqft-1-bhk-apartment-on-rent-in-...
+#                        (a numeric listing id right after /rent/). Browse
+#                        pages are /in/buy/..., /<area>-overview-P..., /flatmates/...,
+#                        and /rent-<building>-...-rpid-AG... (a whole project).
+#   olx.in genuine:      /item/...  (a single classified ad; the slug may be
+#                        /item/for-rent-houses-apartments-c1723-2-bhk-... or
+#                        /item/<slug>-iid-<id>, optionally under an /en-in/
+#                        locale prefix). EVERYTHING else is a browse page:
+#                        bare geo /<area>_g<id>, category /..._c<id>,
+#                        query /q-..., and filtered /..._c<id>?filter=... .
+#                        A pure blocklist missed the bare _g pages and the
+#                        _c<id>?filter= variants (the "?" defeated a
+#                        trailing /|$ anchor) and the pg-guest-houses pages.
+#   nobroker.in genuine: /property/2-bhk-apartment-for-rent-in-<place>-for-rs-<n>
+#                        (an individual property, always under /property/).
+#                        Browse pages sit at the ROOT — /2bhk-flats-for-rent-in-<place>,
+#                        /2-bhk-house-for-rent-in-<place> (any home type, not
+#                        just "flats"), /2bhk-flats-for-rent-in-<project>-prjtl,
+#                        /2bhk-flats-for-sale-in-<place> — and the in-site
+#                        search is /property/rent/bangalore/<area>?searchParam=... .
+#                        So genuine = under /property/ but NOT /property/rent/.
+#                        (?!rent/) excludes that search path; nothing else
+#                        genuine lives under /property/rent/.
+_GENUINE_LISTING_RE = {
+    "housing.com": re.compile(r"/rent/\d+-", re.IGNORECASE),
+    "olx.in": re.compile(r"/item/", re.IGNORECASE),
+    "nobroker.in": re.compile(r"/property/(?!rent/)", re.IGNORECASE),
 }
-_HOUSING_LISTING_ID_RE = re.compile(r"/rent/\d+-", re.IGNORECASE)
 
-# A result's TITLE is the other, portal-agnostic signal: every portal above
-# templates its locality/city search-results page title as "<N> BHK Flats
-# for Rent in <Place>" with no building name, owner, or price in it — often
-# with the portal's own trailing count ("197+" = 197 listings on this one
-# page). The BHK count is itself optional in this template (NoBroker's
-# "any BHK" variant titles itself just "Flats for Rent in <Place>"). A real
-# single listing's title names something specific (sqft, building, "owner",
-# etc.), so it won't fully match this bare template either way.
+# TITLE heuristics are a defensive fallback for any domain that has no URL
+# allowlist above (none of our three portals today — they're all covered —
+# but kept so an added source degrades safely instead of trusting every
+# result). A locality/city results page titles itself "<N> BHK Flats for
+# Rent in <Place>" with no specifics, often with the portal's own count
+# ("197+" = 197 listings on one page). A genuine single listing names
+# something specific (sqft, building, a price) so it won't match. The price
+# guard keeps the greedy place-matcher from swallowing a genuine listing
+# whose own title quotes a rent ("... for Rs 6,000").
 _GENERIC_TITLE_RE = re.compile(
     r"(?:\d*\s*bhk\s+)?(?:flats?|houses?|apartments?|properties)\s+for\s+(?:rent|sale)\s+(?:in|near)\s+"
     r"[\w\s,.]+?(?:[-–]\s*[\w.]+)?\s*\d*\+?\s*$",
     re.IGNORECASE,
 )
 _LISTING_COUNT_RE = re.compile(r"\b\d{2,}\+")
+_PRICE_IN_TITLE_RE = re.compile(r"(?:₹|\brs\.?)\s*\d", re.IGNORECASE)
 
 
 def _is_generic_listing_page(url: str, title: str, expected_domain: str) -> bool:
@@ -95,12 +107,21 @@ def _is_generic_listing_page(url: str, title: str, expected_domain: str) -> bool
     don't match what the brief described.
     """
     low_url = url.lower()
-    pattern = _GENERIC_URL_PATTERNS.get(expected_domain)
-    if pattern and pattern.search(low_url):
-        return True
-    if expected_domain == "housing.com" and not _HOUSING_LISTING_ID_RE.search(low_url):
-        return True
+
+    # Allowlist portals (all three today): the genuine-listing URL shape is
+    # REQUIRED and authoritative. If the URL is that shape, trust it outright
+    # (don't second-guess with the title heuristics); if it isn't, it's a
+    # browse page.
+    allow = _GENUINE_LISTING_RE.get(expected_domain)
+    if allow is not None:
+        return allow.search(low_url) is None
+
+    # Fallback for any domain without an allowlist (defensive — see above).
+    # Secondary title signals, skipped when the title quotes a specific
+    # price, which marks a specific listing, not a bare results page.
     title = title.strip()
+    if _PRICE_IN_TITLE_RE.search(title):
+        return False
     if _GENERIC_TITLE_RE.fullmatch(title) or _LISTING_COUNT_RE.search(title):
         return True
     return False
