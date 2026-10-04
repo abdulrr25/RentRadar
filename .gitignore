@@ -25,6 +25,20 @@ backend/alerts.db
 backend/alerts.db-wal
 backend/alerts.db-shm
 
+# Local throwaway DB used when running the backend against an isolated file
+# (DATABASE_URL=file:.../local_test.db) instead of the real Turso instance
+backend/local_test.db
+backend/local_test.db-wal
+backend/local_test.db-shm
+
+# Local SearXNG dev setup — run the engine from source without Docker
+# (cloned repo, its own venv, a Windows pwd shim, and a generated settings
+# file with a real secret). Local-only; production uses the Dockerfile.
+searxng/src/
+searxng/venv_sx/
+searxng/winshim/
+searxng/runtime_settings.yml
+
 # Node
 node_modules/
 .next/
