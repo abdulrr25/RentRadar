@@ -29,6 +29,24 @@ def test_different_max_rent_is_a_different_key():
     assert query_cache.get("Bellandur", "2BHK", 30000) is None
 
 
+def test_different_min_rent_is_a_different_key():
+    # "under 30000" (no floor) and "20000-30000" share locality/bhk/max_rent
+    # but are different searches — the floor is a hard filter, so a cached
+    # no-floor result must not be served for the range query.
+    query_cache.set("Bellandur", "2BHK", 30000, [], "{}", min_rent=None)
+    assert query_cache.get("Bellandur", "2BHK", 30000, min_rent=20000) is None
+    # ...and the exact same bounds still hit.
+    assert query_cache.get("Bellandur", "2BHK", 30000, min_rent=None) is not None
+
+
+def test_different_preferences_is_a_different_key():
+    query_cache.set("Bellandur", "2BHK", 30000, [], "{}", preferences=["furnished"])
+    assert query_cache.get("Bellandur", "2BHK", 30000, preferences=["parking"]) is None
+    # order-insensitive: same set of preferences hits regardless of order.
+    query_cache.set("Bellandur", "2BHK", 30000, [], "{}", preferences=["furnished", "metro"])
+    assert query_cache.get("Bellandur", "2BHK", 30000, preferences=["metro", "furnished"]) is not None
+
+
 def test_expired_entry_is_not_returned():
     query_cache.set("Bellandur", "2BHK", 25000, [], "{}")
     # Backdate the entry past the TTL directly, rather than sleeping in a test.

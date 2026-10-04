@@ -41,13 +41,17 @@ MAX_AGE_DAYS = 365
 _MAX_AGE_SECONDS = MAX_AGE_DAYS * 24 * 3600
 
 
-def _to_epoch(value: "str | None", rfc822: bool) -> "int | None":
-    """Parse an RSS pubDate or an ISO-8601 timestamp to epoch seconds."""
+def _rfc822_to_epoch(value: "str | None") -> "int | None":
+    """Parse an RSS pubDate ('Wed, 27 May 2026 07:00:00 GMT') to epoch seconds."""
     if not value:
         return None
     try:
-        dt = parsedate_to_datetime(value) if rfc822 else datetime.fromisoformat(value)
+        dt = parsedate_to_datetime(value)
     except (TypeError, ValueError):
+        return None
+    # parsedate_to_datetime returns None for some malformed inputs on older
+    # Pythons (rather than raising) — guard so .tzinfo can't AttributeError.
+    if dt is None:
         return None
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
@@ -100,7 +104,11 @@ async def fetch_hackernews(locality: str) -> dict:
                 title = (h.get("title") or "").strip()
                 if not title:
                     continue
-                published_at = _to_epoch(h.get("created_at"), rfc822=False)
+                # created_at_i is a ready-made unix timestamp — far more
+                # robust than parsing the ISO "…Z" string, which needs
+                # Python 3.11+ and this project pins no runtime version.
+                raw_ts = h.get("created_at_i")
+                published_at = int(raw_ts) if isinstance(raw_ts, (int, float)) else None
                 if not _is_fresh(published_at, now):
                     continue
                 items.append({
@@ -137,7 +145,7 @@ async def fetch_google_news(locality: str) -> dict:
                 title = (item.findtext("title") or "").strip()
                 if not title:
                     continue
-                published_at = _to_epoch(item.findtext("pubDate"), rfc822=True)
+                published_at = _rfc822_to_epoch(item.findtext("pubDate"))
                 if not _is_fresh(published_at, now):
                     continue
                 items.append({

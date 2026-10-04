@@ -186,7 +186,10 @@ async def search(request: Request, body: SearchRequest):
             yield f"data: {json.dumps({'type': 'fetching', 'sources': sources})}\n\n"
             await asyncio.sleep(0)
 
-            cached = query_cache.get(parsed["locality"], parsed["bhk"], parsed["max_rent"])
+            cached = query_cache.get(
+                parsed["locality"], parsed["bhk"], parsed["max_rent"],
+                parsed.get("min_rent"), parsed.get("preferences"),
+            )
             if cached is not None:
                 # Identical search within the last 15 min — skip the search
                 # backend and Groq entirely. Only successful briefs are ever cached (see
@@ -216,6 +219,7 @@ async def search(request: Request, body: SearchRequest):
                         parsed["locality"], parsed["bhk"], parsed["max_rent"],
                         [(item["source"], item["status"]) for item in result["raw_data"]],
                         brief,
+                        parsed.get("min_rent"), parsed.get("preferences"),
                     )
 
             # Phase 5: final brief

@@ -16,8 +16,8 @@ import pytest
 from tools import sentiment_sources
 
 
-def _iso(days_ago: int) -> str:
-    return (datetime.now(timezone.utc) - timedelta(days=days_ago)).strftime("%Y-%m-%dT%H:%M:%SZ")
+def _epoch(days_ago: int) -> int:
+    return int((datetime.now(timezone.utc) - timedelta(days=days_ago)).timestamp())
 
 
 def _rfc822(days_ago: int) -> str:
@@ -51,7 +51,7 @@ def _rss(items: list[tuple[str, str, str]]) -> str:
 @pytest.mark.asyncio
 async def test_hn_keeps_permalink_and_date(monkeypatch):
     _stub_response(monkeypatch, payload={"hits": [
-        {"title": "Bangalore rent is wild", "objectID": "123", "created_at": _iso(10), "points": 42},
+        {"title": "Bangalore rent is wild", "objectID": "123", "created_at_i": _epoch(10), "points": 42},
     ]})
 
     result = await sentiment_sources.fetch_hackernews("Bellandur")
@@ -68,8 +68,8 @@ async def test_hn_drops_ancient_threads(monkeypatch):
     # Measured live: real results included a 2017 thread with 3 points,
     # surfaced as current tech-worker sentiment.
     _stub_response(monkeypatch, payload={"hits": [
-        {"title": "Old thread", "objectID": "1", "created_at": _iso(9 * 365), "points": 3},
-        {"title": "Recent thread", "objectID": "2", "created_at": _iso(5), "points": 10},
+        {"title": "Old thread", "objectID": "1", "created_at_i": _epoch(9 * 365), "points": 3},
+        {"title": "Recent thread", "objectID": "2", "created_at_i": _epoch(5), "points": 10},
     ]})
 
     result = await sentiment_sources.fetch_hackernews("Bellandur")
@@ -80,13 +80,27 @@ async def test_hn_drops_ancient_threads(monkeypatch):
 @pytest.mark.asyncio
 async def test_hn_all_stale_reports_error_status(monkeypatch):
     _stub_response(monkeypatch, payload={"hits": [
-        {"title": "Old", "objectID": "1", "created_at": _iso(5 * 365), "points": 3},
+        {"title": "Old", "objectID": "1", "created_at_i": _epoch(5 * 365), "points": 3},
     ]})
 
     result = await sentiment_sources.fetch_hackernews("Bellandur")
 
     assert result["status"] == "error"
     assert result["items"] == []
+
+
+@pytest.mark.asyncio
+async def test_hn_hit_without_timestamp_is_kept_as_undated(monkeypatch):
+    # A missing created_at_i means unknown, not old — keep it (undated)
+    # rather than silently discarding, same as Google News.
+    _stub_response(monkeypatch, payload={"hits": [
+        {"title": "No timestamp here", "objectID": "9", "points": 7},
+    ]})
+
+    result = await sentiment_sources.fetch_hackernews("Bellandur")
+
+    assert result["status"] == "ok"
+    assert result["items"][0]["published_at"] is None
 
 
 # ── Google News ──────────────────────────────────────────────────────────────

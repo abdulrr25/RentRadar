@@ -335,6 +335,17 @@ async def synthesis_node(state: RentRadarState) -> RentRadarState:
             brief_obj.pop("trend_note", None)
             brief_obj.pop("price_trend", None)
 
+        # hn_signal is a free-text "tech-worker view" summary, not a cited
+        # claim — so it's only trustworthy when Hacker News actually returned
+        # something. When HN is empty/unavailable (common), drop it rather
+        # than let the model invent a sentiment read from nothing.
+        hn_ok = any(
+            item.get("source") == "Hacker News" and item.get("status") == "ok" and item.get("items")
+            for item in raw
+        )
+        if not hn_ok:
+            brief_obj.pop("hn_signal", None)
+
         # Same for the locality scores: keep only dimensions the model named
         # a resolvable headline for. One-decimal scores drawn from nothing
         # are the single most authoritative-looking thing in the whole brief.

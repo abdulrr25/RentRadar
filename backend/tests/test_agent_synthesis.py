@@ -272,6 +272,37 @@ async def test_overall_score_dropped_when_nothing_is_evidenced(monkeypatch):
     assert brief["locality_scores"] == {}
 
 
+@pytest.mark.asyncio
+async def test_hn_signal_dropped_when_hacker_news_empty(monkeypatch):
+    content = json.dumps({
+        "locality": "Bellandur", "top_listings": [],
+        "hn_signal": "Tech workers say Bellandur is great",
+    })
+    monkeypatch.setattr(agent, "_groq_client", lambda: _fake_groq(content))
+
+    # Default _state has no Hacker News source at all → treated as empty.
+    brief = json.loads((await agent.synthesis_node(_state(max_rent=25000)))["brief"])
+    assert "hn_signal" not in brief
+
+
+@pytest.mark.asyncio
+async def test_hn_signal_kept_when_hacker_news_has_items(monkeypatch):
+    content = json.dumps({
+        "locality": "Bellandur", "top_listings": [],
+        "hn_signal": "Tech workers note long commutes",
+    })
+    monkeypatch.setattr(agent, "_groq_client", lambda: _fake_groq(content))
+
+    state = _state(max_rent=25000)
+    state["raw_data"].append({
+        "source": "Hacker News", "status": "ok",
+        "items": [{"title": "Bangalore commute thread", "url": "https://news.ycombinator.com/item?id=1",
+                   "published_at": 1760000000, "mentions_locality": False}],
+    })
+    brief = json.loads((await agent.synthesis_node(state))["brief"])
+    assert brief["hn_signal"] == "Tech workers note long commutes"
+
+
 # ── Community listings merge ────────────────────────────────────────────────
 
 def _community_listing(rent=22000, highlight="Owner direct, near metro"):
