@@ -120,6 +120,51 @@ async def test_recovery_allows_a_later_outage_to_alert_again(monkeypatch):
     assert len(calls) == 2
 
 
+@pytest.mark.asyncio
+async def test_community_listing_still_shown_when_scraped_sources_all_fail(monkeypatch):
+    """
+    The admin alert / degraded status must still fire — the scraped sources
+    really are down — but a matching community submission shouldn't be
+    thrown away just because it happened to arrive on the same search; the
+    "sources unavailable" short-circuit must not win over real data.
+    """
+    sent = {}
+
+    async def fake_send_admin_alert(subject, body):
+        sent["subject"] = subject
+        return True
+
+    monkeypatch.setattr(agent, "send_admin_alert", fake_send_admin_alert)
+    monkeypatch.setattr(agent, "_groq_client", lambda: _FakeGroq())
+
+    state = {
+        "query": {"locality": "Bellandur", "bhk": "2BHK", "max_rent": 25000},
+        "raw_data": [
+            {"source": "NoBroker", "status": "error", "error": "timeout"},
+            {"source": "OLX", "status": "error", "error": "timeout"},
+            {"source": "Housing.com", "status": "error", "error": "timeout"},
+            {"source": "Community", "status": "ok", "listings": [
+                {"locality_detail": "Bellandur (community submission)", "rent": 22000,
+                 "bhk": "2BHK", "source": "Community", "highlights": ["Owner direct"], "url": None},
+            ]},
+        ],
+    }
+
+    import json
+    result = await agent.synthesis_node(state)
+    await _drain_tasks()
+
+    # Outage signal still fires — the scraped sources really did all fail.
+    assert sent["subject"] == "RentRadar alert: all live data sources are down"
+    assert source_health.get_status()["degraded"] is True
+
+    # But the brief isn't the "sources unavailable" short-circuit, and the
+    # community listing survived into the final result.
+    brief = json.loads(result["brief"])
+    assert brief.get("sources_unavailable") is not True
+    assert any(l["source"] == "Community" for l in brief["top_listings"])
+
+
 async def _drain_tasks():
     import asyncio
     # Let scheduled asyncio.create_task callbacks run before assertions.

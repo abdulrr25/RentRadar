@@ -26,6 +26,7 @@ from groq import Groq
 
 from tools.sentiment_sources import fetch_google_news, fetch_hackernews
 from tools.scraper import fetch_nobroker, fetch_olx, fetch_housing
+from tools.community import fetch_community
 from prompts import SYSTEM_PROMPT, build_context
 from channels.email import send_admin_alert
 import source_health
@@ -61,9 +62,10 @@ class RentRadarState(TypedDict):
 
 async def parallel_fetch_node(state: RentRadarState) -> RentRadarState:
     """
-    Fires all 5 data fetches simultaneously.
+    Fires all 6 data fetches simultaneously.
     - Free APIs:   Google News, Hacker News
     - SearXNG:     NoBroker, OLX, Housing.com
+    - Telegram:    Community (user-submitted listings — see tools/community.py)
 
     Uses return_exceptions=True so a single timeout never kills the pipeline.
     """
@@ -71,6 +73,7 @@ async def parallel_fetch_node(state: RentRadarState) -> RentRadarState:
     locality = q["locality"]
     bhk = q["bhk"]
     max_rent = q["max_rent"]
+    min_rent = q.get("min_rent")
 
     results = await asyncio.gather(
         fetch_google_news(locality),
@@ -78,6 +81,7 @@ async def parallel_fetch_node(state: RentRadarState) -> RentRadarState:
         fetch_nobroker(locality, bhk, max_rent),
         fetch_olx(locality, bhk, max_rent),
         fetch_housing(locality, bhk, max_rent),
+        fetch_community(locality, bhk, max_rent, min_rent),
         return_exceptions=True,
     )
 
@@ -122,6 +126,35 @@ def _to_int_rent(val) -> int | None:
         return None
 
 
+def _cited(claim, ref_map: dict) -> dict | None:
+    """
+    Turn one LLM area claim into a source-backed one, or reject it.
+
+    No citation, no claim. The model is asked (prompts.py EVIDENCE RULE) to
+    tag every flag / scam alert / trend note with the [REF] of the headline
+    it came from; anything citing a ref we didn't actually give it is an
+    unsupported assertion dressed as a finding, which is precisely what made
+    these read as fabricated — a city-wide leasing fraud rendered as "this
+    locality has a scam problem", with nothing a reader could check. Same
+    discipline already applied to listing URLs above.
+
+    Plain strings are rejected for the same reason: no ref, no source.
+    """
+    if not isinstance(claim, dict):
+        return None
+    text = (claim.get("text") or "").strip()
+    source = ref_map.get(claim.get("ref"))
+    if not text or not source or not source.get("url"):
+        return None
+    return {
+        "text": text,
+        "url": source["url"],
+        "source": source.get("source"),
+        "published_at": source.get("published_at"),
+        "locality_specific": bool(source.get("mentions_locality")),
+    }
+
+
 async def synthesis_node(state: RentRadarState) -> RentRadarState:
     """
     Sends all raw data to Groq (gpt-oss-120b) for structured synthesis.
@@ -130,13 +163,27 @@ async def synthesis_node(state: RentRadarState) -> RentRadarState:
     raw = state["raw_data"]
     query_desc = f"{state['query'].get('bhk', '?')} in {state['query'].get('locality', 'Bangalore')}"
 
-    all_failed = bool(raw) and all(item.get("status") != "ok" for item in raw)
+    # Two different questions, deliberately kept separate:
+    #   - scraped_all_failed: are the sources RentRadar actually depends on
+    #     for infrastructure health (NoBroker/OLX/Housing/News/HN) down?
+    #     This drives source_health + the admin outage alert.
+    #   - has_community_listing: did a Telegram-submitted listing match?
+    #     This is a normal, slow-moving adoption signal (most searches find
+    #     nothing there for a long time) — it must never count toward "are
+    #     the scraped sources down", or an empty Community result would
+    #     mask a real outage every single search.
+    # Conflating the two would get either wrong: counting Community toward
+    # scraped_all_failed makes the admin alert fire on every quiet search;
+    # excluding it from the skip-synthesis decision below would throw away
+    # a real submitted listing just because the scraped sources happened to
+    # be down at the same time.
+    scraped = [item for item in raw if item.get("source") != "Community"]
+    community_item = next((item for item in raw if item.get("source") == "Community"), None)
+    has_community_listing = bool(community_item and community_item.get("status") == "ok")
 
-    # If every data source failed (search backend or network down), don't
-    # waste an LLM call producing a misleading "no listings" brief — tell
-    # the user the sources are unavailable so the UI can show an honest
-    # message.
-    if all_failed:
+    scraped_all_failed = bool(scraped) and all(item.get("status") != "ok" for item in scraped)
+
+    if scraped_all_failed:
         is_new_outage = source_health.mark_degraded(
             "All live data sources failed on the last search — likely the "
             "search backend or a network issue."
@@ -151,18 +198,22 @@ async def synthesis_node(state: RentRadarState) -> RentRadarState:
                 "instance being rate-limited upstream, or a network/API outage.\n\n"
                 'Users will keep seeing a "sources unavailable" message until this is fixed.',
             ))
-        return {
-            **state,
-            "brief": json.dumps({
-                "sources_unavailable": True,
-                "locality": state["query"].get("locality", "Bangalore"),
-                "message": "All live data sources are currently unavailable. "
-                           "Please try again shortly.",
-            }),
-        }
-
-    # At least one source came back — sources are healthy again.
-    source_health.mark_healthy()
+        # Still worth an LLM call if a community listing matched — that's a
+        # real result the user shouldn't lose just because the scraped
+        # sources happened to be down on the same search.
+        if not has_community_listing:
+            return {
+                **state,
+                "brief": json.dumps({
+                    "sources_unavailable": True,
+                    "locality": state["query"].get("locality", "Bangalore"),
+                    "message": "All live data sources are currently unavailable. "
+                               "Please try again shortly.",
+                }),
+            }
+    else:
+        # At least one scraped source came back — sources are healthy again.
+        source_health.mark_healthy()
 
     context, ref_map = build_context(state["raw_data"], state["query"])
 
@@ -204,28 +255,50 @@ async def synthesis_node(state: RentRadarState) -> RentRadarState:
             else:
                 listing["url"] = None
 
-        # Resolve max_rent early so budget filter and budget_note can both use it
+        # Captured before the community merge below: did the LLM itself see
+        # any listings at all? It never sees community submissions (see
+        # above), so if this is empty its "verdict" prose was written
+        # believing nothing was available — stale and contradictory the
+        # moment a community listing gets merged in afterward. Used below to
+        # decide whether the verdict needs a deterministic override, the
+        # same way budget_note already gets one.
+        llm_had_listings = bool(listings)
+
+        # Community listings are already structured (parsed once at
+        # submission time — see community_store.py) and never touched the
+        # LLM prompt, so they skip the ref-resolution loop above entirely
+        # and join here instead. From this point on they go through the
+        # exact same budget filter, diversity cap, and re-rank as every
+        # LLM-extracted listing — no special-casing needed past this line.
+        if has_community_listing:
+            listings.extend(community_item["listings"])
+
+        # Resolve the budget early so the filter and budget_note both use it
         max_rent = state["query"].get("max_rent")
+        min_rent = state["query"].get("min_rent")
 
         # Hard budget filter — always enforce regardless of LLM behaviour.
         # Rules:
-        #   known rent ≤ max  → keep (normalise to int)
-        #   known rent > max  → drop (over budget)
-        #   rent is null/unknown → KEEP (we cannot verify it's over budget;
-        #     dropping it silently causes "no listings found" when real
-        #     properties exist but their price wasn't in the snippet)
+        #   known rent within bounds → keep (normalise to int)
+        #   known rent out of bounds → drop
+        #   rent is null/unknown     → KEEP (we cannot verify it's out of
+        #     range; dropping it silently causes "no listings found" when
+        #     real properties exist but their price wasn't in the snippet)
         # `is not None` rather than truthy: a max_rent of 0 must still filter
         # (everything is over budget), not silently skip filtering entirely.
-        if max_rent is not None:
+        if max_rent is not None or min_rent is not None:
             filtered = []
             for l in listings:
                 rv = _to_int_rent(l.get("rent"))
                 if rv is None:
                     filtered.append(l)          # unknown price — keep
-                elif rv <= max_rent:
-                    l["rent"] = rv              # normalise to int
-                    filtered.append(l)
-                # else: confirmed over budget — drop
+                    continue
+                if max_rent is not None and rv > max_rent:
+                    continue                    # confirmed over budget — drop
+                if min_rent is not None and rv < min_rent:
+                    continue                    # below the floor they asked for
+                l["rent"] = rv                  # normalise to int
+                filtered.append(l)
             listings = filtered
 
         # Adaptive diversity guarantee: when more than one platform contributed,
@@ -248,6 +321,38 @@ async def synthesis_node(state: RentRadarState) -> RentRadarState:
             l["rank"] = i
         brief_obj["top_listings"] = listings
 
+        # Enforce the EVIDENCE RULE rather than trusting the model to have
+        # followed it: every area claim must resolve to a headline we
+        # actually supplied, or it doesn't ship. See _cited().
+        for field in ("green_flags", "red_flags", "scam_alerts"):
+            brief_obj[field] = [
+                c for c in (_cited(x, ref_map) for x in brief_obj.get(field) or []) if c
+            ]
+        brief_obj["trend_note"] = _cited(brief_obj.get("trend_note"), ref_map)
+        if brief_obj["trend_note"] is None:
+            # An uncited trend note leaves "price_trend" as a bare
+            # rising/falling arrow with nothing behind it — drop both.
+            brief_obj.pop("trend_note", None)
+            brief_obj.pop("price_trend", None)
+
+        # Same for the locality scores: keep only dimensions the model named
+        # a resolvable headline for. One-decimal scores drawn from nothing
+        # are the single most authoritative-looking thing in the whole brief.
+        evidence = brief_obj.pop("scores_evidence", None) or {}
+        scores = brief_obj.get("locality_scores")
+        if isinstance(scores, dict):
+            kept_scores = {
+                dim: val for dim, val in scores.items()
+                if dim != "overall" and ref_map.get(evidence.get(dim))
+            }
+            # "overall" is a summary of the others — it only survives if
+            # something it could summarise did.
+            if kept_scores and isinstance(scores.get("overall"), (int, float)):
+                kept_scores["overall"] = scores["overall"]
+            brief_obj["locality_scores"] = kept_scores
+        else:
+            brief_obj["locality_scores"] = {}
+
         # Deterministic budget_note handling:
         # - If we have in-budget listings, remove any LLM budget_note (not needed)
         # - If hard filter removed ALL listings, set an honest budget_note
@@ -255,11 +360,36 @@ async def synthesis_node(state: RentRadarState) -> RentRadarState:
             if listings:
                 # All remaining listings are in-budget (hard filter ran above)
                 brief_obj.pop("budget_note", None)
+            elif min_rent is not None:
+                brief_obj["budget_note"] = (
+                    f"No listings found between ₹{min_rent:,} and ₹{max_rent:,}/mo "
+                    "in this area. The prices shown in search results were outside "
+                    "that range."
+                )
             else:
                 brief_obj["budget_note"] = (
                     f"No listings found at or below ₹{max_rent:,}/mo in this area. "
                     "The prices shown in search results were above your budget."
                 )
+
+        # The LLM wrote "verdict" (and everything else) believing there were
+        # no listings at all — that prose is stale and self-contradicting
+        # the moment a community submission is the only reason listings is
+        # non-empty now. Override with something that's actually true
+        # rather than show "no listings available" directly above a card
+        # that is one.
+        if listings and not llm_had_listings:
+            # Count flats, not submitters: two listings from one person is
+            # not "2 people have submitted", and we don't expose who sent
+            # what here anyway.
+            count = len(listings)
+            brief_obj["verdict"] = (
+                "No listings from the scraped portals matched this search, but "
+                f"{count} matching {'flat was' if count == 1 else 'flats were'} "
+                "submitted directly via RentRadar's Telegram bot — see below. "
+                "Scraped-portal coverage for this area may just be thin right now; "
+                "try again later for more options."
+            )
 
         brief = json.dumps(brief_obj)
     except (json.JSONDecodeError, ValueError):

@@ -68,6 +68,94 @@ _RENT_UNIT_RE = re.compile(
     re.IGNORECASE,
 )
 
+_AMOUNT = r"(?:₹|rs\.?)?\s*(\d[\d,]*\s*[kK]?)"
+
+# "between 20000 and 30000", "20k-30k", "₹20,000 to ₹30,000" — a budget with
+# both ends. Checked before the single-bound patterns below, since the
+# upper-bound regex would otherwise match only the first number and silently
+# treat a range as "under ₹20,000".
+_RENT_RANGE_RE = re.compile(
+    rf"(?:between|from)?\s*{_AMOUNT}\s*(?:-|–|—|to|and)\s*{_AMOUNT}",
+    re.IGNORECASE,
+)
+
+# The trigger here can itself be the currency symbol ("₹25,000"), so this
+# one spells out its own amount group rather than reusing _AMOUNT.
+_RENT_MAX_RE = re.compile(
+    r"(?:under|below|max|upto|up\s+to|₹|rs\.?)\s*(\d[\d,]*\s*[kK]?)",
+    re.IGNORECASE,
+)
+
+_RENT_MIN_RE = re.compile(
+    rf"(?:above|over|more\s+than|at\s+least|starting\s+(?:at|from)|min(?:imum)?)\s*{_AMOUNT}",
+    re.IGNORECASE,
+)
+
+# Below this, a number was never a monthly Bangalore rent — it's a BHK count
+# ("2 to 3 BHK"), a commute time, a floor number. Guards every amount parsed
+# here, which is what keeps the range regex above from reading "2 to 3 BHK"
+# as a ₹2–₹3 budget.
+_MIN_PLAUSIBLE_RENT = 1000
+
+
+def _to_amount(raw: str) -> "int | None":
+    """'25,000' / '25k' / '25 K' → 25000. None if it isn't a plausible rent."""
+    cleaned = raw.replace(",", "").replace(" ", "").strip()
+    try:
+        value = int(cleaned[:-1]) * 1000 if cleaned.lower().endswith("k") else int(cleaned)
+    except ValueError:
+        return None
+    return value if value >= _MIN_PLAUSIBLE_RENT else None
+
+
+# Soft preferences — things a user asks for that we can rank on but can't
+# verify from a search snippet (nothing here is ever used to exclude a
+# listing; see prompts.py). Deterministic keyword matching, no LLM, same
+# principle as the Telegram submission parsing in main.py.
+# Order matters: the "semi"/"un" variants are checked before plain
+# "furnished", which is a substring of both.
+_PREFERENCE_PATTERNS = {
+    "semi_furnished": r"semi[-\s]?furnished",
+    "unfurnished": r"un[-\s]?furnished",
+    "furnished": r"furnished",
+    "parking": r"\bparking\b|\bcar\s*park(?:ing)?\b",
+    "metro": r"\bmetro\b",
+    "pet_friendly": r"\bpet[-\s]?friendly\b|\bpets?\s+allowed\b",
+    "no_broker": r"\bno\s*broker(?:s|age)?\b|\bowner\s*direct\b|\bdirect\s*(?:from\s*)?owner\b|\bwithout\s*brokers?\b",
+    "gated": r"\bgated\b",
+    "family": r"\bfamil(?:y|ies)\b",
+    "bachelors": r"\bbachelors?\b",
+}
+
+
+# Human-readable form of each canonical preference key, for the LLM context
+# (prompts.py) and anywhere else these need to be shown as words. The
+# frontend keeps its own copy for display — it never sees this module.
+PREFERENCE_LABELS = {
+    "furnished": "furnished",
+    "semi_furnished": "semi-furnished",
+    "unfurnished": "unfurnished",
+    "parking": "parking",
+    "metro": "near metro",
+    "pet_friendly": "pet friendly",
+    "no_broker": "owner direct / no brokerage",
+    "gated": "gated community",
+    "family": "suitable for families",
+    "bachelors": "bachelors allowed",
+}
+
+
+def _extract_preferences(query: str) -> list[str]:
+    found = [
+        name for name, pattern in _PREFERENCE_PATTERNS.items()
+        if re.search(pattern, query, re.IGNORECASE)
+    ]
+    # "semi furnished" / "unfurnished" both contain "furnished" — keep only
+    # the specific one, or the brief would claim the user asked for both.
+    if "semi_furnished" in found or "unfurnished" in found:
+        found = [f for f in found if f != "furnished"]
+    return found
+
 
 def _fix_case(word: str) -> str:
     # Leave acronyms/already-capitalized input alone (e.g. "HAL", "ITPL");
@@ -138,8 +226,19 @@ def parse_query(query: str) -> dict:
         "bhk": "2BHK",
         "locality": "Bangalore",
         "max_rent": 50000,
+        "min_rent": None,
+        "preferences": [],
         "city": "Bangalore",
         "raw_query": query,
+        # True only when a real locality/rent was found — not when the
+        # field is left at its silent default, and not when "locality" was
+        # only ever the loose fallback extraction (below), which is
+        # deliberately permissive for a search query ("something beats a
+        # generic Bangalore-wide search") but too weak a signal to trust
+        # for e.g. gating whether a Telegram submission is a real listing
+        # worth storing versus noise ("hi", a stray capitalized word).
+        "locality_matched": False,
+        "rent_matched": False,
     }
 
     # Extract BHK
@@ -156,42 +255,59 @@ def parse_query(query: str) -> dict:
             matched_len = len(loc)
     if matched_locality:
         result["locality"] = matched_locality
+        result["locality_matched"] = True
     else:
         fuzzy = _fuzzy_match_locality(query)
         if fuzzy:
             result["locality"] = fuzzy
+            result["locality_matched"] = True
         else:
             fallback = _extract_fallback_locality(query)
             if fallback:
                 result["locality"] = fallback
 
-    # Extract max rent — handles ₹25000, Rs 25,000, under 25k, below 25000.
-    # "under"/"below" are common English words unrelated to money — plain
-    # "...under 30 mins to ITPL" would otherwise parse as a ₹30 budget, and
-    # the real listings all get hard-filtered out as "over budget" downstream
-    # in agent.py. Checked as a separate step rather than a regex lookahead:
-    # a lookahead here is defeatable by backtracking (the greedy digit group
-    # backs off to a shorter prefix like "3" to dodge a "not followed by
-    # mins" assertion on "30"), so each full candidate match is found first
-    # and only then checked against what immediately follows it.
-    rent_match = None
-    for candidate in re.finditer(
-        r"(?:under|below|max|upto|up\s+to|₹|rs\.?)\s*(\d[\d,]*[kK]?)",
-        query,
-        re.IGNORECASE,
-    ):
-        if _RENT_UNIT_RE.match(query, candidate.end()):
-            continue  # a time/distance unit, not a currency amount
-        rent_match = candidate
-        break
-    if rent_match:
-        raw = rent_match.group(1).replace(",", "").strip()
-        try:
-            if raw.lower().endswith("k"):
-                result["max_rent"] = int(raw[:-1]) * 1000
-            else:
-                result["max_rent"] = int(raw)
-        except ValueError:
-            pass  # keep default 50000
+    result["preferences"] = _extract_preferences(query)
+
+    # Rent. Each pattern is matched in full first and only then checked
+    # against what immediately follows it — a lookahead is defeatable by
+    # backtracking here (the greedy digit group backs off to a shorter
+    # prefix like "3" to dodge a "not followed by mins" assertion on "30"),
+    # which is why "...under 30 mins to ITPL" used to parse as a ₹30 budget
+    # and hard-filter every real listing out as over-budget in agent.py.
+    #
+    # Ranges go first: "between 20000 and 30000" would otherwise match only
+    # the upper-bound pattern's first number and silently become "under
+    # ₹20,000" — or, before ranges were handled at all, match nothing and
+    # fall back to the ₹50,000 default while the UI confidently showed it.
+    def _first_valid(regex, groups: int = 1):
+        for candidate in regex.finditer(query):
+            if _RENT_UNIT_RE.match(query, candidate.end()):
+                continue  # a time/distance unit, not a currency amount
+            amounts = [_to_amount(candidate.group(i)) for i in range(1, groups + 1)]
+            if all(a is not None for a in amounts):
+                return amounts
+        return None
+
+    rent_range = _first_valid(_RENT_RANGE_RE, groups=2)
+    if rent_range:
+        low, high = sorted(rent_range)
+        result["min_rent"], result["max_rent"] = low, high
+        result["rent_matched"] = True
+    else:
+        rent_max = _first_valid(_RENT_MAX_RE)
+        if rent_max:
+            result["max_rent"] = rent_max[0]
+            result["rent_matched"] = True
+
+        rent_min = _first_valid(_RENT_MIN_RE)
+        if rent_min:
+            result["min_rent"] = rent_min[0]
+            result["rent_matched"] = True
+
+    # A floor above the ceiling is a contradiction we can't resolve — keep
+    # the ceiling (the budget people actually care about) and drop the floor
+    # rather than filtering every listing out.
+    if result["min_rent"] is not None and result["min_rent"] > result["max_rent"]:
+        result["min_rent"] = None
 
     return result

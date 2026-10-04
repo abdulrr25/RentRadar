@@ -338,6 +338,86 @@ def test_telegram_webhook_handles_missing_message_gracefully(client, monkeypatch
     assert res.json() == {"status": "ignored"}
 
 
+# ── telegram: listing submission ────────────────────────────────────────────
+#
+# These cover the webhook's own branching (status strings, the private-chat
+# gate, the length gate) through the real HTTP/FastAPI layer. The actual
+# parsed values and storage correctness are covered by test_community_store.py
+# and test_parser.py's locality_matched/rent_matched cases — not re-verified
+# here via a second, out-of-band DB connection, which would race the
+# TestClient's own event loop.
+
+def _dm(text: str, chat_id: int = 555):
+    return {"message": {"text": text, "chat": {"id": chat_id, "type": "private"}}}
+
+
+def test_telegram_webhook_submission_stores_listing(client, monkeypatch):
+    monkeypatch.setenv("TELEGRAM_WEBHOOK_SECRET", "correct-secret")
+    res = client.post(
+        "/alerts/telegram/webhook",
+        json=_dm("2BHK in Indiranagar, ₹35,000/month, near metro, owner direct"),
+        headers={"X-Telegram-Bot-Api-Secret-Token": "correct-secret"},
+    )
+    assert res.status_code == 200
+    assert res.json() == {"status": "submitted"}
+
+
+def test_telegram_webhook_submission_unparseable_asks_to_rephrase(client, monkeypatch):
+    monkeypatch.setenv("TELEGRAM_WEBHOOK_SECRET", "correct-secret")
+    res = client.post(
+        "/alerts/telegram/webhook",
+        json=_dm("hello is anyone home right now, just checking in"),
+        headers={"X-Telegram-Bot-Api-Secret-Token": "correct-secret"},
+    )
+    assert res.status_code == 200
+    assert res.json() == {"status": "unparseable"}
+
+
+def test_telegram_webhook_submission_rate_limited_after_five(client, monkeypatch):
+    monkeypatch.setenv("TELEGRAM_WEBHOOK_SECRET", "correct-secret")
+    for i in range(5):
+        res = client.post(
+            "/alerts/telegram/webhook",
+            json=_dm(f"2BHK in Indiranagar, ₹3{i},000/month, owner direct"),
+            headers={"X-Telegram-Bot-Api-Secret-Token": "correct-secret"},
+        )
+        assert res.json()["status"] == "submitted"
+
+    res = client.post(
+        "/alerts/telegram/webhook",
+        json=_dm("2BHK in Indiranagar, ₹39,000/month, owner direct"),
+        headers={"X-Telegram-Bot-Api-Secret-Token": "correct-secret"},
+    )
+    assert res.status_code == 200
+    assert res.json() == {"status": "rate_limited"}
+
+
+def test_telegram_webhook_group_chat_not_treated_as_submission(client, monkeypatch):
+    monkeypatch.setenv("TELEGRAM_WEBHOOK_SECRET", "correct-secret")
+    res = client.post(
+        "/alerts/telegram/webhook",
+        json={"message": {
+            "text": "2BHK in Indiranagar, ₹35,000/month, owner direct",
+            "chat": {"id": 777, "type": "group"},
+        }},
+        headers={"X-Telegram-Bot-Api-Secret-Token": "correct-secret"},
+    )
+    assert res.status_code == 200
+    assert res.json() == {"status": "ignored"}
+
+
+def test_telegram_webhook_short_message_ignored(client, monkeypatch):
+    # Below _MIN_SUBMISSION_LENGTH — "hi there" is noise, not an attempt.
+    monkeypatch.setenv("TELEGRAM_WEBHOOK_SECRET", "correct-secret")
+    res = client.post(
+        "/alerts/telegram/webhook",
+        json=_dm("hi there"),
+        headers={"X-Telegram-Bot-Api-Secret-Token": "correct-secret"},
+    )
+    assert res.status_code == 200
+    assert res.json() == {"status": "ignored"}
+
+
 # ── rate limiting ────────────────────────────────────────────────────────────
 
 def test_create_alert_rate_limited_after_five(client):

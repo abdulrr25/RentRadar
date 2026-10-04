@@ -6,6 +6,24 @@ import LocalityScores from "./LocalityScores";
 import AlertSignup from "./AlertSignup";
 import ShareButton from "./ShareButton";
 
+/**
+ * An area claim with the headline it came from. The backend drops any claim
+ * it can't tie to a real source (see agent.py's `_cited`), so anything that
+ * reaches here is citable.
+ *
+ * `string` is the legacy shape: briefs persisted before citations existed
+ * are replayed verbatim on /s/[id] forever, so both forms must render.
+ */
+type Claim =
+  | string
+  | {
+      text?: string;
+      url?: string | null;
+      source?: string | null;
+      published_at?: number | null;
+      locality_specific?: boolean;
+    };
+
 interface RentBrief {
   locality?: string;
   search_summary?: string;
@@ -15,12 +33,58 @@ interface RentBrief {
   top_listings?: any[];
   locality_scores?: Record<string, number>;
   price_trend?: string;
-  trend_note?: string;
+  trend_note?: Claim;
   hn_signal?: string;
-  green_flags?: string[];
-  red_flags?: string[];
-  scam_alerts?: string[];
+  green_flags?: Claim[];
+  red_flags?: Claim[];
+  scam_alerts?: Claim[];
   verdict?: string;
+}
+
+function claimText(c: Claim): string {
+  return (typeof c === "string" ? c : c?.text ?? "").trim();
+}
+
+function claimSource(c: Claim) {
+  return typeof c === "string" ? null : c;
+}
+
+function shortDate(epochSeconds?: number | null): string | null {
+  if (!epochSeconds) return null;
+  return new Date(epochSeconds * 1000).toLocaleDateString("en-IN", {
+    day: "numeric", month: "short", year: "numeric",
+  });
+}
+
+/**
+ * The provenance line under a claim: when it was published, whether it's
+ * actually about this locality or just the city, and a link to read it.
+ * A city-wide story said nothing about the user's area — labelling that was
+ * the difference between "Bellandur has a scam problem" and the truth.
+ */
+function ClaimSource({ claim, tone }: { claim: Claim; tone: string }) {
+  const src = claimSource(claim);
+  if (!src?.url) return null;
+  const date = shortDate(src.published_at);
+
+  return (
+    <span className="mt-1 flex flex-wrap items-center gap-x-1.5 gap-y-1 text-[10px] font-normal opacity-80">
+      {src.locality_specific === false && (
+        <span className="rounded-full bg-white/70 px-1.5 py-px font-semibold uppercase tracking-wide">
+          Bengaluru-wide
+        </span>
+      )}
+      <a
+        href={src.url}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={`underline underline-offset-2 hover:no-underline ${tone}`}
+      >
+        {src.source ?? "Source"}
+      </a>
+      {date && <span>· {date}</span>}
+    </span>
+  );
 }
 
 interface Props {
@@ -123,7 +187,12 @@ export default function RentRadarCard({ rawBrief, parsedQuery, shareId }: Props)
             </div>
           )}
         </div>
-        {brief.trend_note && <p className="mt-3 text-xs text-indigo-200 leading-relaxed">{brief.trend_note}</p>}
+        {brief.trend_note && claimText(brief.trend_note) && (
+          <div className="mt-3 text-xs text-indigo-200 leading-relaxed">
+            {claimText(brief.trend_note)}
+            <ClaimSource claim={brief.trend_note} tone="text-indigo-100" />
+          </div>
+        )}
         {shareId && hasQueryContext && (
           <div className="mt-4 flex justify-end">
             <ShareButton shareId={shareId} locality={parsedQuery!.locality!} bhk={parsedQuery!.bhk!} maxRent={parsedQuery!.max_rent!} />
@@ -219,10 +288,14 @@ export default function RentRadarCard({ rawBrief, parsedQuery, shareId }: Props)
                     </svg>
                     Green Flags
                   </p>
-                  <ul className="space-y-2">
+                  <ul className="space-y-2.5">
                     {brief.green_flags.map((f, i) => (
                       <li key={i} className="flex items-start gap-2 text-sm text-emerald-900">
-                        <span className="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-emerald-600" />{f}
+                        <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-emerald-600" />
+                        <span className="min-w-0">
+                          {claimText(f)}
+                          <ClaimSource claim={f} tone="text-emerald-800" />
+                        </span>
                       </li>
                     ))}
                   </ul>
@@ -236,10 +309,14 @@ export default function RentRadarCard({ rawBrief, parsedQuery, shareId }: Props)
                     </svg>
                     Red Flags
                   </p>
-                  <ul className="space-y-2">
+                  <ul className="space-y-2.5">
                     {brief.red_flags.map((f, i) => (
                       <li key={i} className="flex items-start gap-2 text-sm text-red-900">
-                        <span className="mt-1 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-red-600" />{f}
+                        <span className="mt-1.5 h-1.5 w-1.5 flex-shrink-0 rounded-full bg-red-600" />
+                        <span className="min-w-0">
+                          {claimText(f)}
+                          <ClaimSource claim={f} tone="text-red-800" />
+                        </span>
                       </li>
                     ))}
                   </ul>
@@ -262,9 +339,13 @@ export default function RentRadarCard({ rawBrief, parsedQuery, shareId }: Props)
             } />
             <div className="space-y-2.5 rounded-xl border border-amber-200 bg-amber-50 p-4">
               {brief.scam_alerts.map((a, i) => (
-                <p key={i} className="flex items-start gap-2.5 text-sm text-amber-800">
-                  <span className="mt-0.5 flex-shrink-0 font-bold text-amber-600">!</span>{a}
-                </p>
+                <div key={i} className="flex items-start gap-2.5 text-sm text-amber-800">
+                  <span className="mt-0.5 flex-shrink-0 font-bold text-amber-600">!</span>
+                  <span className="min-w-0">
+                    {claimText(a)}
+                    <ClaimSource claim={a} tone="text-amber-900" />
+                  </span>
+                </div>
               ))}
             </div>
           </div>

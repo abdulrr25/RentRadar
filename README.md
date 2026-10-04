@@ -14,16 +14,16 @@
 Type **"2BHK near Bellandur under ₹25,000"** and RentRadar:
 
 1. Parses your natural language query into structured parameters
-2. Fires **5 parallel data fetches** across live portals and discussion platforms
+2. Fires **6 parallel data fetches** across live portals, discussion platforms, and user-submitted listings
 3. Synthesises everything with **gpt-oss-120b via Groq** into a structured rental brief
 4. Streams results back in real time via Server-Sent Events
 
 **Output per search:**
-- Top listings (NoBroker · OLX · Housing.com) with prices, highlights, and direct property links
-- Locality scores — safety, water supply, traffic, food, public transport (1–10)
+- Top listings (NoBroker · OLX · Housing.com · community-submitted via Telegram) with prices, highlights, and direct property links where verified
+- Locality scores — only for dimensions an actual headline speaks to (1–10); no evidence, no score
 - Price trend direction (rising / stable / falling) with a one-line insight
 - Tech-worker signal from Hacker News
-- Green flags, red flags, and scam alerts
+- Green flags, red flags, and scam alerts — each one linked to the dated headline it came from, and labelled "Bengaluru-wide" when the story isn't about your locality
 - Plain-English verdict
 
 ---
@@ -41,14 +41,16 @@ Type **"2BHK near Bellandur under ₹25,000"** and RentRadar:
 │                                             │
 │  parser.py → LangGraph Agent               │
 │                   │                         │
-│       ┌───────────┴──────────┐             │
-│       ▼                      ▼             │
-│  Free sentiment APIs  Self-hosted SearXNG   │
-│  · Google News (RSS)  · NoBroker           │
-│  · Hacker News (HN)   · OLX               │
-│                        · Housing.com        │
-│       │                      │             │
-│       └───────────┬──────────┘             │
+│       ┌───────────┼───────────┐            │
+│       ▼           ▼           ▼            │
+│  Free sentiment  Self-hosted  Telegram bot  │
+│  APIs            SearXNG      submissions   │
+│  · Google News   · NoBroker   (community_   │
+│    (RSS)         · OLX        store.py —    │
+│  · Hacker News   · Housing    structured,   │
+│    (HN)            .com       skips the LLM)│
+│       │            │            │           │
+│       └────────────┴────────────┘           │
 │                   ▼                         │
 │         Groq / gpt-oss-120b                │
 │         (synthesis → JSON brief)           │
@@ -61,11 +63,12 @@ Type **"2BHK near Bellandur under ₹25,000"** and RentRadar:
 
 | Source | Tool | What It Provides |
 |--------|------|-----------------|
-| Google News | Google News RSS | Recent rental market coverage |
-| Hacker News | Algolia HN Search API | Tech-worker housing signals |
+| Google News | Google News RSS | Recent rental market coverage (link + date kept for citation; >1yr old dropped) |
+| Hacker News | Algolia HN Search API | Tech-worker housing signals (HN permalink + date kept; >1yr old dropped) |
 | NoBroker | Self-hosted SearXNG | Owner-direct listings with prices |
 | OLX | Self-hosted SearXNG | Individual rental ad pages |
 | Housing.com | Self-hosted SearXNG | Broker listings with deposit info |
+| Community | Telegram bot DM (`community_store.py`) | Listings submitted directly by users — no portal in between |
 
 ---
 
@@ -78,9 +81,11 @@ RentRadar/
 │   ├── agent.py         # LangGraph graph (fetch → synthesise)
 │   ├── parser.py        # Natural language → structured query
 │   ├── prompts.py       # System prompt + context builder with ref-map
+│   ├── community_store.py  # Telegram-submitted listings (create/search/expire)
 │   ├── tools/
 │   │   ├── sentiment_sources.py  # Free APIs (Google News, HN)
-│   │   └── scraper.py            # Self-hosted SearXNG (NoBroker, OLX, Housing.com)
+│   │   ├── scraper.py            # Self-hosted SearXNG (NoBroker, OLX, Housing.com)
+│   │   └── community.py          # Wraps community_store for the agent's fetch step
 │   └── requirements.txt
 ├── frontend/
 │   ├── app/
@@ -233,8 +238,12 @@ Open: `http://localhost:3000`
 
 ## Key Technical Details
 
-- **Ref-based URL mapping** — each search result gets a `[REF]` tag (NB1, OLX2, HS1…); the LLM cites the ref; backend maps ref→{url, source} to prevent hallucinated URLs and badge mismatches
-- **Hard budget enforcement** — listings with `rent > max_rent` are stripped in Python post-LLM, regardless of LLM behaviour
+- **Ref-based URL mapping** — each search result *and news headline* gets a `[REF]` tag (NB1, OLX2, GN1, HN2…); the LLM cites the ref; backend maps ref→{url, source, date} to prevent hallucinated URLs and badge mismatches
+- **No citation, no claim** — every green flag, red flag, scam alert and trend note must cite a headline we actually supplied. Anything citing an unknown ref, or no ref at all, is dropped in Python before it ships (`agent.py`'s `_cited`). Same for locality scores: a dimension with no supporting headline is omitted rather than guessed, so an empty scores panel is a valid — and honest — outcome
+- **Locality scoping** — a `site:`-free news search for "<locality> Bangalore rent" returns mostly city-wide stories (measured: 1 of 8 results for Indiranagar actually mentioned it). Whether a headline names the locality is decided in Python and passed to the model, which must word city-wide stories as city-wide; the UI tags them "Bengaluru-wide"
+- **Stale-source cutoff** — headlines and HN threads older than a year are dropped outright (HN was returning 2017 threads as current sentiment); everything kept is rendered with its date
+- **Hard budget enforcement** — listings outside `min_rent`/`max_rent` are stripped in Python post-LLM, regardless of LLM behaviour
+- **Filters vs. preferences** — only locality, BHK and budget filter results. Recognised preferences ("furnished", "near metro") rank them and are shown as dashed chips, with the distinction stated in the UI, so nothing the user typed silently disappears
 - **Adaptive diversity cap** — when 2+ platforms have data, each is capped at 2 listings so no single portal dominates
 - **`sources_unavailable` short-circuit** — when all sources fail (e.g. API quota), skips LLM and returns an honest error message
 - **SSE streaming** — results stream progressively: `parsed` → `fetching` → `source_complete` (×6) → `brief` → `done`
@@ -245,7 +254,7 @@ Open: `http://localhost:3000`
 
 | Event | Payload | When |
 |-------|---------|------|
-| `parsed` | `{locality, bhk, max_rent}` | Immediately after parse |
+| `parsed` | `{locality, bhk, max_rent, min_rent, preferences}` | Immediately after parse |
 | `fetching` | `[source names]` | Before parallel fetch |
 | `source_complete` | `{source, status}` | As each of 6 finishes |
 | `brief` | Full JSON brief | After synthesis |
@@ -285,6 +294,20 @@ Any channel without its env vars set falls back to a logging stub (see `backend/
 | `POST /internal/run-alerts` | Checks every active, confirmed saved search for new matches and fires alerts. Requires an `X-Internal-Secret` header matching `ALERTS_INTERNAL_SECRET` — returns 503 if that env var isn't set. Meant to be called by a scheduler (e.g. a Render Cron Job hitting this every 30–60 min), not by the frontend. |
 
 The matching worker ([alert_worker.py](backend/alert_worker.py)) intentionally skips the LLM synthesis step used by `/search` — it calls the NoBroker/OLX/Housing.com scrapers directly and only alerts on listings with a parsed price at or under budget, keeping each run free (SearXNG search only, no Groq tokens spent on unattended background checks).
+
+---
+
+## Community listings
+
+The same Telegram bot used for alerts above doubles as a listing intake channel — DM it a real flat ("2BHK in Indiranagar, ₹35,000/month, near metro, owner direct") and it becomes a searchable listing within seconds, shown in results alongside the scraped portals. This is deliberately the highest-leverage data source in the app: scraped search results are inherently approximate (see Key Technical Details below), but a listing a real person typed in is exact.
+
+How it works ([main.py](backend/main.py)'s `telegram_webhook` → `_handle_listing_submission`):
+1. Only private-chat DMs are considered (group chatter is never parsed as a submission), and only messages long enough to plausibly be a real attempt.
+2. The text is parsed with the same `parser.parse_query()` used for search queries — no extra LLM call, fully deterministic. A submission is only stored when both locality and rent were a genuine match, not `parse_query`'s silent default; otherwise the bot asks the sender to rephrase.
+3. Stored listings expire after 14 days and are capped at 5 submissions/chat/day — see `community_store.py`.
+4. At search time, `tools/community.py` pulls matching listings and merges them directly into `top_listings` *after* the LLM call (never through the prompt — no hallucination risk, no token cost for data that's already structured), subject to the same hard budget filter and per-source diversity cap as everything else.
+
+An empty Community result is normal (most searches won't have a submission yet) and is explicitly excluded from the `sources_unavailable` / admin-outage logic — it must never be mistaken for a real NoBroker/OLX/Housing.com failure.
 
 ---
 

@@ -6,7 +6,9 @@ POST /feedback                 — accepts a user feedback rating + optional com
 GET  /internal/feedback         — read back collected feedback (secret-protected).
 POST /alerts                   — create a saved search on one of three channels
                                   (telegram / webpush / email); each has its own opt-in flow.
-POST /alerts/telegram/webhook   — inbound Telegram update; a "/start <token>" confirms.
+POST /alerts/telegram/webhook   — inbound Telegram update; a "/start <token>" confirms a
+                                  saved search, any other private-chat message is treated
+                                  as a listing submission (see community_store.py).
 GET  /alerts/confirm/{token}    — email confirmation link target.
 DELETE /alerts/{id}             — deactivate a saved search.
 POST /internal/run-alerts       — check all saved searches for new matches (scheduler-triggered).
@@ -40,6 +42,7 @@ from parser import parse_query
 from agent import agent
 import db
 import alerts_store
+import community_store
 import source_health
 import briefs_store
 import feedback_store
@@ -178,7 +181,7 @@ async def search(request: Request, body: SearchRequest):
             # Phase 2: signal fetch start
             sources = [
                 "Google News", "Hacker News",
-                "NoBroker", "OLX", "Housing.com",
+                "NoBroker", "OLX", "Housing.com", "Community",
             ]
             yield f"data: {json.dumps({'type': 'fetching', 'sources': sources})}\n\n"
             await asyncio.sleep(0)
@@ -426,6 +429,12 @@ class TelegramUpdate(BaseModel):
     message: dict | None = None
 
 
+# Minimum length (chars) for a non-/start private message to be treated as a
+# listing submission attempt, rather than ignored — filters out "hi",
+# "/help", "thanks" and similar noise without a dedicated command parser.
+_MIN_SUBMISSION_LENGTH = 15
+
+
 @app.post("/alerts/telegram/webhook")
 @limiter.limit("60/minute")
 async def telegram_webhook(
@@ -450,19 +459,73 @@ async def telegram_webhook(
 
     message = body.message or {}
     text = (message.get("text") or "").strip()
-    chat_id = (message.get("chat") or {}).get("id")
+    chat = message.get("chat") or {}
+    chat_id = chat.get("id")
 
-    if not text.startswith("/start ") or chat_id is None:
+    if chat_id is None:
         return {"status": "ignored"}
 
-    link_token = text[len("/start "):].strip()
-    confirmed_id = await alerts_store.confirm_by_token(link_token, target=str(chat_id))
-    if confirmed_id is None:
-        await send_telegram(str(chat_id), "That link has expired or was already used.")
-        return {"status": "no_pending_search"}
+    if text.startswith("/start "):
+        link_token = text[len("/start "):].strip()
+        confirmed_id = await alerts_store.confirm_by_token(link_token, target=str(chat_id))
+        if confirmed_id is None:
+            await send_telegram(str(chat_id), "That link has expired or was already used.")
+            return {"status": "no_pending_search"}
 
-    await send_telegram(str(chat_id), "You're all set — we'll message you here when a new match appears.")
-    return {"status": "confirmed", "id": confirmed_id}
+        await send_telegram(str(chat_id), "You're all set — we'll message you here when a new match appears.")
+        return {"status": "confirmed", "id": confirmed_id}
+
+    # Anything else, from a private DM and long enough to plausibly be an
+    # actual listing (not "hi" or a stray "/help") — treated as a submitted
+    # listing. Gated on chat type so group-chat chatter never gets parsed
+    # as a submission (today's /start tests omit "type" entirely, which
+    # correctly falls through to "ignored" below, same as before this
+    # existed — only a real Telegram DM payload, which always carries
+    # "type": "private", reaches this branch in production).
+    if chat.get("type") == "private" and len(text) >= _MIN_SUBMISSION_LENGTH:
+        return await _handle_listing_submission(str(chat_id), text)
+
+    return {"status": "ignored"}
+
+
+async def _handle_listing_submission(chat_id: str, text: str) -> dict:
+    """
+    Parse a free-text Telegram DM into a community listing and store it, or
+    ask the sender to rephrase. Reuses parser.parse_query() — the same
+    extraction a search query goes through — rather than a dedicated LLM
+    call: deterministic, already tested, and this is exactly the extraction
+    a listing needs (BHK, locality, a ₹ amount).
+    """
+    if await community_store.count_recent_by_chat(chat_id) >= community_store.SUBMIT_LIMIT_PER_DAY:
+        await send_telegram(
+            chat_id, "You've submitted a few listings already today — try again tomorrow."
+        )
+        return {"status": "rate_limited"}
+
+    parsed = parse_query(text)
+    # Only store when both were a real match, not parse_query's silent
+    # default (locality→"Bangalore", rent→50000) — a search query can
+    # afford a loose default (it still searches *something*), but storing a
+    # defaulted "2BHK, Bangalore, ₹50,000" from someone who texted "hi
+    # there, is this bot alive?" would silently fabricate a listing.
+    if not (parsed["locality_matched"] and parsed["rent_matched"]):
+        await send_telegram(
+            chat_id,
+            "I couldn't quite pick out the locality and rent from that — try something "
+            'like:\n"2BHK in Indiranagar, ₹35,000/month, near metro, owner direct"',
+        )
+        return {"status": "unparseable"}
+
+    await community_store.create_listing(
+        chat_id, parsed["locality"], parsed["bhk"], parsed["max_rent"], text
+    )
+    await send_telegram(
+        chat_id,
+        f"Got it! {parsed['bhk']} in {parsed['locality']}, ₹{parsed['max_rent']:,}/month — "
+        f"this is now visible to people searching that area for the next "
+        f"{community_store.EXPIRY_DAYS} days.",
+    )
+    return {"status": "submitted"}
 
 
 @app.get("/alerts/confirm/{token}", response_class=HTMLResponse)

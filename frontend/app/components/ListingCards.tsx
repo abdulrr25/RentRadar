@@ -9,6 +9,18 @@ interface Listing {
   commute_note?: string;
   highlights?: string[];
   url?: string | null;
+  /** Unix seconds — community submissions only (see tools/community.py). */
+  posted_at?: number | null;
+}
+
+/** "today" / "3 days ago" — recency is most of what makes a stranger's
+ *  listing trustworthy, and it's the one thing a portal link can't show. */
+function postedAgo(epochSeconds: number): string | null {
+  const days = Math.floor((Date.now() / 1000 - epochSeconds) / 86400);
+  if (!Number.isFinite(days) || days < 0) return null;
+  if (days === 0) return "posted today";
+  if (days === 1) return "posted yesterday";
+  return `posted ${days} days ago`;
 }
 
 const SOURCE_STYLE: Record<
@@ -35,6 +47,15 @@ const SOURCE_STYLE: Record<
     chipBg: "bg-blue-600",
     chipText: "text-white",
     initial: "H",
+  },
+  Community: {
+    // Telegram's own brand blue — visually distinct from the portal colors
+    // above, and recognizable as "this came from the Telegram bot".
+    accent: "linear-gradient(135deg, #229ED9 0%, #1b7fb0 100%)",
+    badge: "border-sky-200 bg-sky-50 text-sky-700",
+    chipBg: "bg-sky-500",
+    chipText: "text-white",
+    initial: "C",
   },
 };
 const DEFAULT_STYLE = {
@@ -123,7 +144,14 @@ function CardContent({ l }: { l: Listing }) {
 
       {/* CTA */}
       <div className="mt-3.5 flex items-center justify-between border-t border-slate-100 pt-3">
-        <span className="text-[11px] text-slate-400">Verified link to the exact listing</span>
+        <span className="text-[11px] text-slate-400">
+          {clickable
+            ? "Verified link to the exact listing"
+            : [
+                "Submitted via Telegram · unverified",
+                l.posted_at ? postedAgo(l.posted_at) : null,
+              ].filter(Boolean).join(" · ")}
+        </span>
         {clickable && (
           <span
             className="inline-flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[11px] font-semibold text-white shadow-sm transition group-hover:brightness-110"

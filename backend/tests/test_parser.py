@@ -128,6 +128,118 @@ def test_short_words_do_not_trigger_false_fuzzy_matches():
     assert r["locality"] != "" and r["locality"] is not None
 
 
+# ── locality_matched / rent_matched confidence flags ────────────────────────
+
+def test_confidence_flags_true_for_a_real_match():
+    r = parse_query("2BHK near Bellandur under 25000")
+    assert r["locality_matched"] is True
+    assert r["rent_matched"] is True
+
+
+def test_confidence_flags_true_for_fuzzy_locality_match():
+    r = parse_query("1 bhk in kadubesanhalli under 25k")
+    assert r["locality_matched"] is True
+    assert r["rent_matched"] is True
+
+
+def test_confidence_flags_false_when_nothing_matches():
+    # Nothing here resolves to a real locality or a real rent — both flags
+    # must say so, even though "locality"/"max_rent" still hold their
+    # (silent-default) values for a search query's sake.
+    r = parse_query("looking for a place")
+    assert r["locality_matched"] is False
+    assert r["rent_matched"] is False
+    assert r["locality"] == "Bangalore"
+    assert r["max_rent"] == 50000
+
+
+# ── rent ranges / minimum rent ──────────────────────────────────────────────
+
+def test_between_x_and_y_sets_both_bounds():
+    # Regression: this matched none of the upper-bound triggers, so it fell
+    # back to the ₹50,000 default while the UI chip confidently read
+    # "max ₹50,000" — a wrong answer presented as an understood one.
+    r = parse_query("2BHK Bellandur between 20000 and 30000")
+    assert r["min_rent"] == 20000
+    assert r["max_rent"] == 30000
+    assert r["rent_matched"] is True
+
+
+def test_dash_separated_k_range():
+    r = parse_query("2BHK Bellandur 20k-30k")
+    assert (r["min_rent"], r["max_rent"]) == (20000, 30000)
+
+
+def test_range_given_high_to_low_is_normalised():
+    r = parse_query("2BHK Bellandur between 30000 and 20000")
+    assert (r["min_rent"], r["max_rent"]) == (20000, 30000)
+
+
+def test_separate_min_and_max_phrases():
+    r = parse_query("2BHK Koramangala above 20000 under 30000")
+    assert (r["min_rent"], r["max_rent"]) == (20000, 30000)
+
+
+def test_bhk_count_range_is_not_read_as_a_budget():
+    # "2 to 3" is a BHK count, not ₹2–₹3 — the plausible-rent floor is what
+    # stops the range regex from swallowing it.
+    r = parse_query("2 to 3 BHK in Indiranagar under 40000")
+    assert r["min_rent"] is None
+    assert r["max_rent"] == 40000
+
+
+def test_commute_range_is_not_read_as_a_budget():
+    r = parse_query("2BHK near Bellandur under 30 mins from ITPL")
+    assert r["min_rent"] is None
+    assert r["max_rent"] == 50000
+    assert r["rent_matched"] is False
+
+
+def test_min_above_max_drops_the_floor():
+    # Contradictory input — keep the ceiling people actually care about
+    # rather than filtering every listing out.
+    r = parse_query("2BHK Bellandur above 40000 under 30000")
+    assert r["min_rent"] is None
+    assert r["max_rent"] == 30000
+
+
+def test_no_rent_bounds_leaves_min_unset():
+    assert parse_query("2BHK near Bellandur under 25000")["min_rent"] is None
+
+
+# ── preferences ─────────────────────────────────────────────────────────────
+
+def test_extracts_multiple_preferences():
+    r = parse_query("2BHK furnished near metro in Indiranagar under 35k, no brokers, with parking")
+    assert set(r["preferences"]) == {"furnished", "metro", "parking", "no_broker"}
+
+
+def test_semi_furnished_does_not_also_report_furnished():
+    r = parse_query("3BHK Whitefield under 50k, semi furnished")
+    assert "semi_furnished" in r["preferences"]
+    assert "furnished" not in r["preferences"]
+
+
+def test_unfurnished_does_not_also_report_furnished():
+    r = parse_query("1BHK HSR Layout under 20k unfurnished")
+    assert "unfurnished" in r["preferences"]
+    assert "furnished" not in r["preferences"]
+
+
+def test_no_preferences_for_a_plain_query():
+    assert parse_query("2BHK near Bellandur under 25000")["preferences"] == []
+
+
+def test_locality_matched_false_for_loose_fallback_extraction():
+    # The raw fallback extraction (an unrecognised place-like word) is
+    # deliberately permissive for a search query, but it's not a confident
+    # match — e.g. it could just as easily latch onto a person's name in a
+    # sentence that isn't about a locality at all.
+    r = parse_query("2BHK near Nelamangala under 15000")
+    assert r["locality"] == "Nelamangala"
+    assert r["locality_matched"] is False
+
+
 def test_clearly_unrelated_word_does_not_fuzzy_match():
     r = parse_query("2BHK near Nelamangala under 20000")
     assert r["locality"] == "Nelamangala"  # not fuzzy-matched to an unrelated known locality

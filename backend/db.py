@@ -59,6 +59,21 @@ CREATE TABLE IF NOT EXISTS feedback (
     created_at INTEGER NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_feedback_created_at ON feedback(created_at);
+CREATE TABLE IF NOT EXISTS community_listings (
+    id          TEXT PRIMARY KEY,
+    chat_id     TEXT NOT NULL,
+    locality    TEXT NOT NULL,
+    bhk         TEXT NOT NULL,
+    rent        INTEGER NOT NULL,
+    description TEXT NOT NULL,
+    status      TEXT NOT NULL DEFAULT 'active',
+    created_at  INTEGER NOT NULL,
+    expires_at  INTEGER NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_community_listings_search
+    ON community_listings(locality, bhk, status, expires_at);
+CREATE INDEX IF NOT EXISTS idx_community_listings_chat_id
+    ON community_listings(chat_id, created_at);
 """
 
 _client: libsql_client.Client | None = None

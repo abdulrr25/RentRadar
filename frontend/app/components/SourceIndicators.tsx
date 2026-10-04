@@ -8,7 +8,7 @@ interface Props {
 }
 
 /* Listing portals = critical. Sentiment sources = optional context. */
-const LISTING_SOURCES = new Set(["NoBroker", "OLX", "Housing.com"]);
+const LISTING_SOURCES = new Set(["NoBroker", "OLX", "Housing.com", "Community"]);
 
 function pill(status: SourceStatus, isSentiment: boolean) {
   if (status === "ok")       return "border-emerald-300 bg-emerald-100 text-emerald-800";

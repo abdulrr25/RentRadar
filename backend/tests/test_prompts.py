@@ -44,7 +44,11 @@ def test_build_context_maps_refs_to_source_and_url():
                 {"title": "2BHK Bellandur", "url": "https://nobroker.in/x", "snippet": "₹25,000/month"},
             ],
         },
-        {"source": "Hacker News", "status": "ok", "data": "People say Bellandur traffic is bad"},
+        {"source": "Hacker News", "status": "ok", "items": [
+            {"title": "People say Bellandur traffic is bad",
+             "url": "https://news.ycombinator.com/item?id=1",
+             "published_at": 1760000000, "mentions_locality": True},
+        ]},
     ]
     query = {"bhk": "2BHK", "locality": "Bellandur", "max_rent": 25000}
 
@@ -64,3 +68,56 @@ def test_build_context_marks_unavailable_sources():
 
     assert ref_map == {}
     assert "no results" in context
+
+
+def test_sentiment_items_get_refs_with_date_and_locality_scope():
+    raw_data = [
+        {"source": "Google News", "status": "ok", "items": [
+            {"title": "Bellandur rents climb 12% this quarter",
+             "url": "https://news.example/1",
+             "published_at": 1760000000, "mentions_locality": True},
+            {"title": "Bengaluru leasing fraud leaves tenants stranded",
+             "url": "https://news.example/2",
+             "published_at": 1750000000, "mentions_locality": False},
+        ]},
+    ]
+    query = {"bhk": "2BHK", "locality": "Bellandur", "max_rent": 25000}
+
+    context, ref_map = build_context(raw_data, query)
+
+    assert ref_map["GN1"]["url"] == "https://news.example/1"
+    assert ref_map["GN1"]["mentions_locality"] is True
+    assert ref_map["GN2"]["mentions_locality"] is False
+
+    # The model needs both markers to word a claim honestly — see the
+    # LOCALITY RULE in SYSTEM_PROMPT.
+    assert "[about Bellandur]" in context
+    assert "[Bengaluru-wide]" in context
+    assert "2025" in context or "2026" in context  # a real date, not "undated"
+
+
+def test_sentiment_source_with_no_items_is_marked_unavailable():
+    context, ref_map = build_context(
+        [{"source": "Hacker News", "status": "error", "items": []}],
+        {"bhk": "2BHK", "locality": "Bellandur", "max_rent": 25000},
+    )
+    assert "[Hacker News]: unavailable" in context
+    assert ref_map == {}
+
+
+def test_build_context_never_mentions_community_source():
+    # Community listings are already-structured and merged directly into
+    # top_listings after the LLM call (agent.py's synthesis_node) — they
+    # must never reach the prompt itself, successful or not, since there's
+    # no "data" (sentiment text) field on them to show under AREA SENTIMENT.
+    query = {"bhk": "2BHK", "locality": "Bellandur", "max_rent": 25000}
+
+    ok_context, _ = build_context(
+        [{"source": "Community", "status": "ok", "listings": [{"rent": 22000}]}], query
+    )
+    assert "Community" not in ok_context
+
+    empty_context, _ = build_context(
+        [{"source": "Community", "status": "error", "listings": []}], query
+    )
+    assert "Community" not in empty_context

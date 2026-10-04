@@ -10,10 +10,21 @@ paid intermediary:
 Reddit was dropped from this list (not added here) — its official API
 requires accepting Data API Terms that gate commercial use behind explicit
 written approval, which isn't a fit for a product that may monetize later.
+
+Each item keeps its URL and publication date. Both APIs return them and
+this module used to discard both, keeping only the headline text — which
+made every downstream claim (scam alerts, red flags, price trend, locality
+scores) impossible to cite or date. Measured consequences of that, before
+this changed: HN stories from 2017 and 2023 surfaced as current
+"tech-worker signal", and city-wide news about a corporate leasing fraud
+was rendered as a scam alert for whichever locality the user searched. See
+prompts.py (ref tagging) and agent.py (uncited claims are dropped).
 """
 
 import logging
 import xml.etree.ElementTree as ET
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 
 import httpx
 
@@ -21,12 +32,62 @@ logger = logging.getLogger("rentradar.sentiment_sources")
 
 USER_AGENT = "RentRadar/1.0 (Bangalore rental search tool)"
 
+# Anything older than this is dropped outright rather than shown with its
+# date: a 2017 HN thread is not "what people are saying about this area",
+# and presenting it as such is the kind of thing that makes the whole brief
+# untrustworthy. Items inside the window are kept but always rendered with
+# their date, so the reader can weigh a 5-month-old headline themselves.
+MAX_AGE_DAYS = 365
+_MAX_AGE_SECONDS = MAX_AGE_DAYS * 24 * 3600
+
+
+def _to_epoch(value: "str | None", rfc822: bool) -> "int | None":
+    """Parse an RSS pubDate or an ISO-8601 timestamp to epoch seconds."""
+    if not value:
+        return None
+    try:
+        dt = parsedate_to_datetime(value) if rfc822 else datetime.fromisoformat(value)
+    except (TypeError, ValueError):
+        return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return int(dt.timestamp())
+
+
+def _is_fresh(published_at: "int | None", now: int) -> bool:
+    # Undated items are kept: the date is missing, not old, and dropping
+    # them would quietly discard most of a source on a bad parse.
+    return published_at is None or (now - published_at) <= _MAX_AGE_SECONDS
+
+
+def _mentions(locality: str, title: str) -> bool:
+    """
+    Whether this headline is actually about the locality the user searched.
+
+    A `site:`-free news search for "<locality> Bangalore rent" returns
+    mostly city-wide stories — measured live: 1 of 8 results for Indiranagar
+    actually mentioned Indiranagar. The LLM can't tell the difference from
+    the text alone, so it's decided here and passed through as a marker.
+    """
+    return bool(locality) and locality.lower() in (title or "").lower()
+
+
+def _finish(source: str, items: list, error: str) -> dict:
+    """Shared return shape. Empty is reported as an error status, matching
+    the convention scraper.py already uses for a search that ran fine but
+    found nothing."""
+    if not items:
+        return {"source": source, "status": "error", "items": [], "error": error}
+    items.sort(key=lambda i: i["published_at"] or 0, reverse=True)
+    return {"source": source, "status": "ok", "items": items}
+
 
 # ── Hacker News ──────────────────────────────────────────────────────────────
 
 async def fetch_hackernews(locality: str) -> dict:
     """Algolia's public HN Search API — no key, no auth, no rate-limit signup."""
     query = f"Bangalore {locality} rent"
+    now = int(datetime.now(timezone.utc).timestamp())
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(15.0, connect=5.0)) as client:
             resp = await client.get(
@@ -34,17 +95,26 @@ async def fetch_hackernews(locality: str) -> dict:
                 params={"query": query, "tags": "story", "hitsPerPage": 10},
             )
             resp.raise_for_status()
-            hits = resp.json().get("hits", [])
-            if not hits:
-                return {"source": "Hacker News", "status": "error", "data": "", "error": "No results"}
-
-            lines = [
-                f"- {(h.get('title') or '').strip()} ({h.get('points', 0)} points, {h.get('num_comments', 0)} comments)"
-                for h in hits[:8]
-            ]
-            return {"source": "Hacker News", "status": "ok", "data": "\n".join(lines)}
+            items = []
+            for h in resp.json().get("hits", [])[:8]:
+                title = (h.get("title") or "").strip()
+                if not title:
+                    continue
+                published_at = _to_epoch(h.get("created_at"), rfc822=False)
+                if not _is_fresh(published_at, now):
+                    continue
+                items.append({
+                    "title": title,
+                    # The HN permalink, not the submitted article: it's the
+                    # discussion that carries the signal we're quoting.
+                    "url": f"https://news.ycombinator.com/item?id={h.get('objectID')}",
+                    "published_at": published_at,
+                    "mentions_locality": _mentions(locality, title),
+                    "points": h.get("points", 0),
+                })
+            return _finish("Hacker News", items, "No recent results")
     except Exception as e:
-        return {"source": "Hacker News", "status": "error", "data": "", "error": str(e)}
+        return {"source": "Hacker News", "status": "error", "items": [], "error": str(e)}
 
 
 # ── Google News ──────────────────────────────────────────────────────────────
@@ -52,6 +122,7 @@ async def fetch_hackernews(locality: str) -> dict:
 async def fetch_google_news(locality: str) -> dict:
     """Google News RSS search feed — no key, no auth."""
     query = f"{locality} Bangalore rent property"
+    now = int(datetime.now(timezone.utc).timestamp())
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(15.0, connect=5.0)) as client:
             resp = await client.get(
@@ -61,13 +132,23 @@ async def fetch_google_news(locality: str) -> dict:
             )
             resp.raise_for_status()
             root = ET.fromstring(resp.text)
-            items = root.findall(".//item")[:8]
-            if not items:
-                return {"source": "Google News", "status": "error", "data": "", "error": "No results"}
-
-            lines = [f"- {(item.findtext('title') or '').strip()}" for item in items]
-            return {"source": "Google News", "status": "ok", "data": "\n".join(lines)}
+            items = []
+            for item in root.findall(".//item")[:8]:
+                title = (item.findtext("title") or "").strip()
+                if not title:
+                    continue
+                published_at = _to_epoch(item.findtext("pubDate"), rfc822=True)
+                if not _is_fresh(published_at, now):
+                    continue
+                items.append({
+                    "title": title,
+                    "url": (item.findtext("link") or "").strip() or None,
+                    "published_at": published_at,
+                    "mentions_locality": _mentions(locality, title),
+                })
+            return _finish("Google News", items, "No recent results")
     except ET.ParseError as e:
-        return {"source": "Google News", "status": "error", "data": "", "error": f"Bad RSS response: {e}"}
+        return {"source": "Google News", "status": "error", "items": [],
+                "error": f"Bad RSS response: {e}"}
     except Exception as e:
-        return {"source": "Google News", "status": "error", "data": "", "error": str(e)}
+        return {"source": "Google News", "status": "error", "items": [], "error": str(e)}
