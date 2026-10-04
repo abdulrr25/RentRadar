@@ -51,7 +51,7 @@ def test_generic_listing_page_detects_real_nobroker_search_url():
         "?searchParam=W3sibGF0IjoxMi45Mzk3MTU1LCJsb24iOjc3LjY5NTI3MzIsInNob3dNYXAiOmZhbHNlLCJwbGFjZUlkIjoiQ2hJSjBVaXBBYklUcmpzUjh1UGdhaDhxYWl3IiwicGxhY2VOYW1lIjoiS2FkdWJlZXNhbmFoYWxsaSIsImNpdHkiOiJiYW5nYWxvcmUifV0="
         "&lat_lng=12.934665000000000000,77.697564999999940000"
     )
-    assert _is_generic_listing_page(url) is True
+    assert _is_generic_listing_page(url, "Kadubeesanahalli Property", "nobroker.in") is True
 
 
 def test_generic_listing_page_detects_search_url_with_type_filter():
@@ -59,15 +59,84 @@ def test_generic_listing_page_detects_search_url_with_type_filter():
         "https://www.nobroker.in/property/rent/bangalore/Kadubeesanahalli,%20Bangalore"
         "?searchParam=W3sibGF0IjoxMi45Mzk0MTM3fQ==&lat_lng=12.9397155,77.6952732&type=BHK1"
     )
-    assert _is_generic_listing_page(url) is True
+    assert _is_generic_listing_page(url, "Kadubeesanahalli Property", "nobroker.in") is True
 
 
 def test_generic_listing_page_false_for_real_specific_listing():
-    # Captured live in the same search — a genuine single-property page.
+    # Captured live in the same search — a genuine single-property page: a
+    # numeric listing ID up front, specific sqft, singular "apartment".
     url = "https://housing.com/rent/19960137-750-sqft-1-bhk-apartment-on-rent-in-kadubeesanahalli-bengaluru"
-    assert _is_generic_listing_page(url) is False
+    title = "750 sqft 1 BHK Apartment for Rent in Kadubeesanahalli, Bengaluru"
+    assert _is_generic_listing_page(url, title, "housing.com") is False
 
 
 def test_generic_listing_page_case_insensitive():
     url = "https://www.nobroker.in/property/rent/bangalore/x?SearchParam=abc"
-    assert _is_generic_listing_page(url) is True
+    assert _is_generic_listing_page(url, "Some Property", "nobroker.in") is True
+
+
+def test_generic_listing_page_detects_nobroker_locality_wide_page():
+    # Captured live: site:nobroker.in search for "2BHK Bellandur" returning
+    # this as a top result. Its own title says "Flats" (plural) and the
+    # page itself lists a dozen+ differently-priced units — not one flat.
+    url = "https://www.nobroker.in/2bhk-flats-for-rent-in-bellandur_bangalore"
+    title = "2 BHK Flats for Rent in   Bellandur Bangalore - NoBroker"
+    assert _is_generic_listing_page(url, title, "nobroker.in") is True
+
+
+def test_generic_listing_page_detects_nobroker_project_wide_page():
+    # Captured live: a whole-apartment-complex page ("197+" units), not one
+    # flat, despite the URL naming a specific building ("Adarsh Rosewood").
+    url = "https://www.nobroker.in/2bhk-flats-for-rent-in-adarsh-rosewood-bellandur-bangalore-prjtl"
+    title = "2 BHK  Flats for Rent in   Bellandur, Bangalore - NoBroker 197+ "
+    assert _is_generic_listing_page(url, title, "nobroker.in") is True
+
+
+def test_generic_listing_page_detects_nobroker_for_sale_page():
+    # Wrong transaction type entirely — must never surface in a rent search
+    # even though the domain and BHK match.
+    url = "https://www.nobroker.in/2bhk-flats-for-sale-in-bellandur_bangalore"
+    assert _is_generic_listing_page(url, "2 BHK Flats for Sale in Bellandur Bangalore - NoBroker", "nobroker.in") is True
+
+
+def test_generic_listing_page_detects_housing_city_wide_page():
+    # Captured live: site:housing.com search for "2BHK Bellandur" returning
+    # a whole-Bangalore results page (not even Bellandur-specific), with no
+    # numeric listing ID in the URL.
+    url = "https://housing.com/rent/2bhk-flats-for-rent-in-bangalore-karnataka-C4P38f9yfbk7p3m2h1f"
+    title = "2 BHK Flats for Rent in Bangalore, Karnataka"
+    assert _is_generic_listing_page(url, title, "housing.com") is True
+
+
+def test_generic_listing_page_detects_housing_buy_page():
+    url = "https://housing.com/in/buy/bengaluru/2bhk-flats-fid"
+    assert _is_generic_listing_page(url, "2 BHK Flats for Sale in Bengaluru", "housing.com") is True
+
+
+def test_generic_listing_page_detects_olx_category_page():
+    # Captured live: a bare category/query browse page, not one ad.
+    url = "https://www.olx.in/real-estate_c3/q-2-bhk-flats"
+    assert _is_generic_listing_page(url, "2 BHK Flats - OLX", "olx.in") is True
+
+
+def test_generic_listing_page_false_for_genuine_olx_ad():
+    url = "https://www.olx.in/item/2bhk-semi-furnished-flat-for-rent-near-bellandur-iid-1234567890"
+    title = "2BHK semi furnished flat for rent near Bellandur, fully furnished with parking"
+    assert _is_generic_listing_page(url, title, "olx.in") is False
+
+
+def test_generic_listing_page_detects_nobroker_any_bhk_locality_page():
+    # Captured live, same search — the "any BHK" variant of the locality
+    # page has no "2bhk-" prefix in the URL and no "BHK" in the title at
+    # all, unlike the other NoBroker generic pages above.
+    url = "https://www.nobroker.in/flats-for-rent-in-bellandur_bangalore"
+    title = "Flats for Rent in Bellandur Bangalore - NoBroker"
+    assert _is_generic_listing_page(url, title, "nobroker.in") is True
+
+
+def test_generic_listing_page_detects_trailing_listing_count_regardless_of_domain():
+    # The portal's own "<N>+" count is a strong signal on its own, even when
+    # the URL shape itself doesn't match any known bad pattern for that
+    # domain — a page the URL-only checks would have let through.
+    url = "https://www.nobroker.in/property/rent/bangalore/some-building-xyz123"
+    assert _is_generic_listing_page(url, "Flats available near Bellandur 85+", "nobroker.in") is True

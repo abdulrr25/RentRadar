@@ -16,6 +16,7 @@ it. See source_health.py for how that shows up if it happens.
 """
 
 import logging
+import re
 import httpx
 import os
 from urllib.parse import urlparse
@@ -42,17 +43,67 @@ def _matches_domain(url: str, expected_domain: str) -> bool:
     return netloc == expected_domain or netloc.endswith("." + expected_domain)
 
 
-def _is_generic_listing_page(url: str) -> bool:
+# Per-portal URL shape of a locality/city/project-wide results page, or a
+# wrong-transaction-type page (a for-sale page surfacing in a rent search) —
+# anything that is NOT one specific flat. Seen live:
+#   nobroker.in/2bhk-flats-for-rent-in-bellandur_bangalore         whole-locality page, a
+#                                                                   dozen+ different prices on it
+#   nobroker.in/2bhk-flats-for-rent-in-adarsh-rosewood-...-prjtl   whole-project page ("197+" listings)
+#   nobroker.in/2bhk-flats-for-sale-in-...                         for sale, not rent
+#   nobroker.in/property/rent/bangalore/{area}?searchParam=...     re-runs a location filter
+#   housing.com/in/buy/...                                         for sale, not rent
+#   olx.in/real-estate_c3/q-2-bhk-flats                            category/query browse page
+# A genuine Housing.com listing (captured live, see test_scraper.py) instead
+# looks like /rent/19960137-750-sqft-1-bhk-apartment-on-rent-in-kadubeesanahalli-bengaluru
+# — a numeric listing ID up front, not a bare "<bhk> flats for rent in
+# <place>" template — so for housing.com the ID prefix is required rather
+# than pattern-matching the bad shape.
+_GENERIC_URL_PATTERNS = {
+    # \b not a literal leading "-": NoBroker's "any BHK" variant of this same
+    # page (.../flats-for-rent-in-bellandur_bangalore) has "flats" right at
+    # the start of the path, with no "2bhk-" prefix before it to anchor on.
+    "nobroker.in": re.compile(r"\bflats-for-(?:rent|sale)-(?:in|near)-|searchparam=", re.IGNORECASE),
+    "housing.com": re.compile(r"/(?:in/)?buy/", re.IGNORECASE),
+    "olx.in": re.compile(r"/q-|_c\d+(?:/|$)", re.IGNORECASE),
+}
+_HOUSING_LISTING_ID_RE = re.compile(r"/rent/\d+-", re.IGNORECASE)
+
+# A result's TITLE is the other, portal-agnostic signal: every portal above
+# templates its locality/city search-results page title as "<N> BHK Flats
+# for Rent in <Place>" with no building name, owner, or price in it — often
+# with the portal's own trailing count ("197+" = 197 listings on this one
+# page). The BHK count is itself optional in this template (NoBroker's
+# "any BHK" variant titles itself just "Flats for Rent in <Place>"). A real
+# single listing's title names something specific (sqft, building, "owner",
+# etc.), so it won't fully match this bare template either way.
+_GENERIC_TITLE_RE = re.compile(
+    r"(?:\d*\s*bhk\s+)?(?:flats?|houses?|apartments?|properties)\s+for\s+(?:rent|sale)\s+(?:in|near)\s+"
+    r"[\w\s,.]+?(?:[-–]\s*[\w.]+)?\s*\d*\+?\s*$",
+    re.IGNORECASE,
+)
+_LISTING_COUNT_RE = re.compile(r"\b\d{2,}\+")
+
+
+def _is_generic_listing_page(url: str, title: str, expected_domain: str) -> bool:
     """
-    True when a URL is a locality-wide search/category page, not one
-    specific property — seen live: NoBroker returning
-    ".../property/rent/bangalore/{area}?searchParam=<base64 location filter>"
-    URLs. That page just re-runs a location filter and shows whatever is
-    currently listed there; it's not "this listing", and showing it as if
-    it were one specific flat is the "fake/half information" a user hits
-    the exact moment the listing turns out not to be the flat described.
+    True when a result is a locality/city/project-wide search page, or the
+    wrong transaction type (a for-sale page surfacing in a rent search) —
+    not one specific flat. Showing one of these as if it were "this
+    listing" — a single plucked-out price and a direct link to a page that
+    actually lists a dozen to hundreds of differently-priced units — is the
+    "fake/half information" a user hits the moment the details on the page
+    don't match what the brief described.
     """
-    return "searchparam=" in url.lower()
+    low_url = url.lower()
+    pattern = _GENERIC_URL_PATTERNS.get(expected_domain)
+    if pattern and pattern.search(low_url):
+        return True
+    if expected_domain == "housing.com" and not _HOUSING_LISTING_ID_RE.search(low_url):
+        return True
+    title = title.strip()
+    if _GENERIC_TITLE_RE.fullmatch(title) or _LISTING_COUNT_RE.search(title):
+        return True
+    return False
 
 
 async def _search(prompt: str, source_name: str, expected_domain: str, limit: int = 6) -> dict:
@@ -91,7 +142,10 @@ async def _search(prompt: str, source_name: str, expected_domain: str, limit: in
             ]
 
             on_domain = [r for r in all_results if _matches_domain(r["url"], expected_domain)]
-            results = [r for r in on_domain if not _is_generic_listing_page(r["url"])]
+            results = [
+                r for r in on_domain
+                if not _is_generic_listing_page(r["url"], r["title"], expected_domain)
+            ]
 
             dropped_domain = len(all_results) - len(on_domain)
             dropped_generic = len(on_domain) - len(results)
