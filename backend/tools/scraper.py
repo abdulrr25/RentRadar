@@ -1,6 +1,7 @@
 """
 Property listing fetcher — uses a self-hosted SearXNG instance (see
-../../searxng/) to find real listings from NoBroker, OLX, and Housing.com.
+../../searxng/) to find real listings from NoBroker, OLX, Housing.com,
+99acres, and MagicBricks.
 
 Direct scraping of these portals is blocked by bot detection, so we use web
 search instead. Each portal returns several distinct result pages, each with
@@ -72,10 +73,19 @@ def _matches_domain(url: str, expected_domain: str) -> bool:
 #                        So genuine = under /property/ but NOT /property/rent/.
 #                        (?!rent/) excludes that search path; nothing else
 #                        genuine lives under /property/rent/.
+#   99acres.com genuine: /detail/<numeric-id>-... (individual listing).
+#                        Browse pages are /<area>-property-for-rent-...,
+#                        /bangalore-real-estate-... etc.
+#   magicbricks.com genuine: /propertyDetails/<id> or /property-for-rent/.../<id>.html
+#                        Browse pages are /property-for-rent/bangalore-...
 _GENUINE_LISTING_RE = {
     "housing.com": re.compile(r"/rent/\d+-", re.IGNORECASE),
     "olx.in": re.compile(r"/item/", re.IGNORECASE),
     "nobroker.in": re.compile(r"/property/(?!rent/)", re.IGNORECASE),
+    "99acres.com": re.compile(r"/detail/\d+", re.IGNORECASE),
+    "magicbricks.com": re.compile(
+        r"(/propertyDetails/\d+|/property-for-rent/.+/\d+\.html)", re.IGNORECASE
+    ),
 }
 
 # TITLE heuristics are a defensive fallback for any domain that has no URL
@@ -212,3 +222,15 @@ async def fetch_housing(locality: str, bhk: str, max_rent: int) -> dict:
     """Search Housing.com for rental listings in this locality."""
     prompt = f'{bhk} rental flat {locality} Bangalore site:housing.com'
     return await _search(prompt, "Housing.com", "housing.com")
+
+
+async def fetch_99acres(locality: str, bhk: str, max_rent: int) -> dict:
+    """Search 99acres for rental listings — good public indexing of individual listings."""
+    prompt = f'{bhk} flat for rent in {locality} Bangalore site:99acres.com'
+    return await _search(prompt, "99acres", "99acres.com")
+
+
+async def fetch_magicbricks(locality: str, bhk: str, max_rent: int) -> dict:
+    """Search MagicBricks for rental listings — well indexed by search engines."""
+    prompt = f'{bhk} apartment for rent {locality} Bangalore site:magicbricks.com'
+    return await _search(prompt, "MagicBricks", "magicbricks.com")

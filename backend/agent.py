@@ -4,7 +4,7 @@ LangGraph agent for RentRadar.
 Graph:
   parallel_fetch_node  →  synthesis_node  →  END
 
-Node 1 fires 5 async fetches simultaneously (free sentiment APIs + SearXNG search).
+Node 1 fires 8 async fetches simultaneously (free sentiment APIs + SearXNG search).
 Node 2 sends all raw data to Groq (gpt-oss-120b) for structured synthesis.
 Groq is free — sign up at console.groq.com.
 """
@@ -25,7 +25,13 @@ from langgraph.graph import StateGraph, END
 from groq import AsyncGroq
 
 from tools.sentiment_sources import fetch_google_news, fetch_hackernews
-from tools.scraper import fetch_nobroker, fetch_olx, fetch_housing
+from tools.scraper import (
+    fetch_nobroker,
+    fetch_olx,
+    fetch_housing,
+    fetch_99acres,
+    fetch_magicbricks,
+)
 from tools.community import fetch_community
 from prompts import SYSTEM_PROMPT, build_context
 from channels.email import send_admin_alert
@@ -53,7 +59,7 @@ def _fire_and_forget(coro) -> None:
 
 class RentRadarState(TypedDict):
     query: dict           # parsed query params from parser.py
-    raw_data: List[dict]  # all fetched results (5 sources)
+    raw_data: List[dict]  # all fetched results (8 sources)
     brief: str            # final synthesized JSON brief
     error: str            # any critical pipeline error
 
@@ -62,10 +68,17 @@ class RentRadarState(TypedDict):
 
 async def parallel_fetch_node(state: RentRadarState) -> RentRadarState:
     """
-    Fires all 6 data fetches simultaneously.
+    Fires all 8 data fetches simultaneously.
     - Free APIs:   Google News, Hacker News
-    - SearXNG:     NoBroker, OLX, Housing.com
+    - SearXNG:     NoBroker, OLX, Housing.com, 99acres, MagicBricks
     - Telegram:    Community (user-submitted listings — see tools/community.py)
+
+    99acres and MagicBricks are added as additional SearXNG-searchable sources
+    because their individual listing pages are well-indexed by public search
+    engines (Google/Bing find specific flat pages, not just browse pages),
+    unlike NoBroker/OLX/Housing.com whose search-indexed pages are mostly
+    browse/category pages. Having 5 portal sources increases the chance that
+    at least 2-3 return specific listings for any given locality.
 
     Uses return_exceptions=True so a single timeout never kills the pipeline.
     """
@@ -81,6 +94,8 @@ async def parallel_fetch_node(state: RentRadarState) -> RentRadarState:
         fetch_nobroker(locality, bhk, max_rent),
         fetch_olx(locality, bhk, max_rent),
         fetch_housing(locality, bhk, max_rent),
+        fetch_99acres(locality, bhk, max_rent),
+        fetch_magicbricks(locality, bhk, max_rent),
         fetch_community(locality, bhk, max_rent, min_rent),
         return_exceptions=True,
     )
@@ -165,7 +180,7 @@ async def synthesis_node(state: RentRadarState) -> RentRadarState:
 
     # Two different questions, deliberately kept separate:
     #   - scraped_all_failed: are the sources RentRadar actually depends on
-    #     for infrastructure health (NoBroker/OLX/Housing/News/HN) down?
+    #     for infrastructure health (portals + News/HN) down?
     #     This drives source_health + the admin outage alert.
     #   - has_community_listing: did a Telegram-submitted listing match?
     #     This is a normal, slow-moving adoption signal (most searches find
@@ -177,7 +192,10 @@ async def synthesis_node(state: RentRadarState) -> RentRadarState:
     # excluding it from the skip-synthesis decision below would throw away
     # a real submitted listing just because the scraped sources happened to
     # be down at the same time.
-    scraped = [item for item in raw if item.get("source") != "Community"]
+    scraped = [
+        item for item in raw
+        if item.get("source") not in ("Community",)
+    ]
     community_item = next((item for item in raw if item.get("source") == "Community"), None)
     has_community_listing = bool(community_item and community_item.get("status") == "ok")
 
