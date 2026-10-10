@@ -22,7 +22,7 @@ warnings.filterwarnings("ignore", category=DeprecationWarning, module="langgraph
 warnings.filterwarnings("ignore", message=".*allowed_objects.*")
 
 from langgraph.graph import StateGraph, END
-from groq import Groq
+from groq import AsyncGroq
 
 from tools.sentiment_sources import fetch_google_news, fetch_hackernews
 from tools.scraper import fetch_nobroker, fetch_olx, fetch_housing
@@ -32,9 +32,9 @@ from channels.email import send_admin_alert
 import source_health
 
 
-def _groq_client() -> Groq:
+def _groq_client() -> AsyncGroq:
     """Create Groq client at call time so the key is always fresh from env."""
-    return Groq(api_key=os.getenv("GROQ_API_KEY", ""))
+    return AsyncGroq(api_key=os.getenv("GROQ_API_KEY", ""))
 
 
 # asyncio only holds a weak reference to a task created via create_task — with
@@ -121,7 +121,7 @@ def _to_int_rent(val) -> int | None:
     if isinstance(val, str):
         val = val.replace(",", "").replace("₹", "").strip()
     try:
-        return int(val)
+        return int(float(val))
     except (ValueError, TypeError):
         return None
 
@@ -218,7 +218,7 @@ async def synthesis_node(state: RentRadarState) -> RentRadarState:
     context, ref_map = build_context(state["raw_data"], state["query"])
 
     client = _groq_client()
-    response = client.chat.completions.create(
+    response = await client.chat.completions.create(
         model="openai/gpt-oss-120b",
         max_tokens=2048,
         temperature=0.2,
